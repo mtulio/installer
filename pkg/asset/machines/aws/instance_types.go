@@ -29,6 +29,11 @@ func PreferredInstanceType(ctx context.Context, meta *awsconfig.Metadata, types 
 		return types[0], err
 	}
 
+	// priority instance is available in enough zones to run in full HA
+	if len(found[types[0]]) >= 3 {
+		return types[0], err
+	}
+
 	for _, t := range types {
 		if found[t].HasAll(zones...) {
 			return t, nil
