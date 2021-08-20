@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	platDef "github.com/openshift/installer/pkg/types/aws/defaults"
 	"github.com/pkg/errors"
 )
 
@@ -30,6 +31,9 @@ func availabilityZones(ctx context.Context, session *session.Session, region str
 
 	zones := []string{}
 	for _, zone := range resp.AvailabilityZones {
+		if platDef.InvalidAvailabilityZones(region, *zone.ZoneName) {
+			continue
+		}
 		zones = append(zones, *zone.ZoneName)
 	}
 

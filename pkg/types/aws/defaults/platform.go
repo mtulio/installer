@@ -16,6 +16,12 @@ var (
 			// "us-east-1":      {"m6g", "m6gd"},
 		},
 	}
+	defaultZoneExclusionByRegion = map[string][]string{
+		"us-east-1": {
+			// us-east-1e has limitations of Nitro Instances
+			"us-east-1e",
+		},
+	}
 )
 
 // SetPlatformDefaults sets the defaults for the platform.
@@ -54,4 +60,24 @@ func InstanceClasses(region string, arch types.Architecture) []string {
 	default:
 		return []string{"m5", "m4"}
 	}
+}
+
+// InvalidAvailabilityZones return a boolean indicating if there's
+// restrictions to use the zoneName on the region.
+func InvalidAvailabilityZones(region, zoneName string) bool {
+	var invalid bool = false
+
+	// No region to be excluded
+	if _, ok := defaultZoneExclusionByRegion[region]; !ok {
+		return invalid
+	}
+
+	// No AZ in current region to be excluded
+	for _, az := range defaultZoneExclusionByRegion[region] {
+		if az == zoneName {
+			return !invalid
+		}
+	}
+
+	return invalid
 }
