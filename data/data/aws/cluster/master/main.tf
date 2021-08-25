@@ -133,6 +133,7 @@ resource "aws_instance" "master" {
   iam_instance_profile = aws_iam_instance_profile.master.name
   instance_type        = var.instance_type
   user_data            = var.user_data_ign
+  monitoring           = var.monitoring
 
   network_interface {
     network_interface_id = aws_network_interface.master[count.index].id
@@ -153,6 +154,7 @@ resource "aws_instance" "master" {
     var.tags,
   )
 
+  ebs_optimized = var.ebs_optimized
   root_block_device {
     volume_type = var.root_volume_type
     volume_size = var.root_volume_size

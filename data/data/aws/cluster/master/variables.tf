@@ -95,3 +95,15 @@ variable "iam_role_name" {
   type = string
   description = "The name of the existing role to use for the instance profile"
 }
+
+variable "monitoring" {
+  type        = string
+  default     = "true"
+  description = "AWS Detailed monitoring."
+}
+
+variable "ebs_optimized" {
+  type        = bool
+  default     = true
+  description = "AWS EBS Optimized."
+}
