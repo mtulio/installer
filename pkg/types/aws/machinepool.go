@@ -25,6 +25,11 @@ type MachinePool struct {
 	// +optional
 	EC2RootVolume `json:"rootVolume"`
 
+	// EBSBlockDevices defines the additional volumes for EC2 instances in the machine pool.
+	//
+	// +optional
+	EBSBlockDevices `json:"ebsBlockDevices"`
+
 	// IAMRole is the name of the IAM Role to use for the instance profile of the machine.
 	// Leave unset to have the installer create the IAM Role on your behalf.
 	// +optional
@@ -90,3 +95,30 @@ type EC2RootVolume struct {
 	// +optional
 	KMSKeyARN string `json:"kmsKeyARN,omitempty"`
 }
+
+// EC2RootVolume defines the storage for an ec2 instance.
+type EBSBlockDevice struct {
+	DeviceName int `json:"deviceName"`
+	// IOPS defines the amount of provisioned IOPS. This is only valid
+	// for type io1.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	IOPS int `json:"iops"`
+
+	// Size defines the size of the volume in gibibytes (GiB).
+	//
+	// +kubebuilder:validation:Minimum=0
+	Size int `json:"size"`
+
+	// Type defines the type of the volume.
+	Type string `json:"type"`
+
+	// The KMS key that will be used to encrypt the EBS volume.
+	// If no key is provided the default KMS key for the account will be used.
+	// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetEbsDefaultKmsKeyId.html
+	// +optional
+	KMSKeyARN string `json:"kmsKeyARN,omitempty"`
+}
+
+type EBSBlockDevices []EBSBlockDevice

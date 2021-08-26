@@ -39,6 +39,8 @@ type config struct {
 	BootstrapIgnitionStub   string            `json:"aws_bootstrap_stub_ignition"`
 	MasterIAMRoleName       string            `json:"aws_master_iam_role_name,omitempty"`
 	WorkerIAMRoleName       string            `json:"aws_worker_iam_role_name,omitempty"`
+	// TODO(mtulio) support for additional devices (ebsBlockDevices)
+	// MasterEBSBlockDevice    []map[string]string `json:"aws_master_ebs_block_devices,omitempty"`
 }
 
 // TFVarsSources contains the parameters to be converted into Terraform variables
@@ -113,6 +115,34 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 	if *rootVolume.EBS.VolumeType == "io1" && rootVolume.EBS.Iops == nil {
 		return nil, errors.New("EBS IOPS must be configured for the io1 root volume")
 	}
+
+	if len(masterConfig.BlockDevices) > 2 {
+		return nil, errors.New("We does not support more than two volumes")
+	}
+
+	// TODO(mtulio) : add support to ebsBlockDevices
+	// if len(masterConfig.BlockDevices) > 1 {
+	// 	// TODO (mtulio) support more than one extra vols
+	// 	secondVolume := masterConfig.BlockDevices[1]
+	// 	if secondVolume.EBS == nil {
+	// 		return nil, errors.New("EBS information must be configured for the block device")
+	// 	}
+	// 	if secondVolume.EBS.VolumeType == nil {
+	// 		return nil, errors.New("EBS volume type must be configured for the block device")
+	// 	}
+
+	// 	if secondVolume.EBS.VolumeSize == nil {
+	// 		return nil, errors.New("EBS volume size must be configured for the block device")
+	// 	}
+
+	// 	if secondVolume.EBS.DeviceName == nil {
+	// 		return nil, errors.New("EBS device name must be configured for the block device non-root")
+	// 	}
+
+	// 	if *secondVolume.EBS.VolumeType == "io1" && secondVolume.EBS.Iops == nil {
+	// 		return nil, errors.New("EBS IOPS must be configured for the io1 root volume")
+	// 	}
+	// }
 
 	instanceClass := defaults.InstanceClass(masterConfig.Placement.Region, sources.Architecture)
 

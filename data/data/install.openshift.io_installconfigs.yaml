@@ -127,6 +127,51 @@ spec:
                           items:
                             type: string
                           type: array
+                        # TODO(mtulio): change to list of volumes (ebsBlockDevices)
+                        ebsBlockDevices:
+                          description: Extra block devices.
+                          items:
+                            description: EC2RootVolume defines the root volume for EC2
+                              instances in the machine pool.
+                            properties:
+                              iops:
+                                description: IOPS defines the amount of provisioned
+                                  IOPS. This is only valid for type io1.
+                                minimum: 0
+                                type: integer
+                              kmsKeyARN:
+                                description: The KMS key that will be used to encrypt
+                                  the EBS volume. If no key is provided the default
+                                  KMS key for the account will be used. https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetEbsDefaultKmsKeyId.html
+                                type: string
+                              size:
+                                description: Size defines the size of the volume in
+                                  gibibytes (GiB).
+                                minimum: 0
+                                type: integer
+                              type:
+                                description: Type defines the type of the volume.
+                                type: string
+                              deviceName:
+                                description: Block device name
+                                type: string
+                              # label:
+                              #   description: Label name
+                              #   type: string
+                              # mountPath:
+                              #   description: Mount path
+                              #   type: string
+                              # mountPath:
+                              #   description: Mount path
+                              #   type: string
+                            required:
+                            - deviceName
+                            # - label
+                            # - mountPath
+                            - size
+                            - type
+                            type: object
+                          type: array
                       type: object
                     azure:
                       description: Azure is the configuration used when installing
