@@ -60,6 +60,20 @@ variable "root_volume_kms_key_id" {
   description = "The KMS key id that should be used tpo encrypt the root block device."
 }
 
+# https://registry.terraform.io/modules/terraform-aws-modules/ec2-instance/aws/latest#input_ebs_block_device
+variable "ebs_block_devices" {
+  type        = list(map(string))
+  default     = []
+  description =  EBS Block Device list - non-root
+}
+
+# https://registry.terraform.io/modules/terraform-aws-modules/ec2-instance/aws/latest#input_ephemeral_block_device
+variable "ephemeral_block_devices" {
+  type        = list(map(string))
+  default     = []
+  description =  Instance Block Device list - non-root
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}

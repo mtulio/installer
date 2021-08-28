@@ -128,7 +128,7 @@ spec:
                             type: string
                           type: array
                         # TODO(mtulio): change to list of volumes (ebsBlockDevices)
-                        ebsBlockDevices:
+                        blockDevices:
                           description: Extra block devices.
                           items:
                             description: EC2RootVolume defines the root volume for EC2
@@ -150,8 +150,10 @@ spec:
                                 minimum: 0
                                 type: integer
                               type:
-                                description: Type defines the type of the volume.
+                                description: Type defines the type of the volume (EBS or Ephemeral).
                                 type: string
+                              # TODO check correct names: deviceName (OS) &| blockName (VIRT)
+                              # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/block-device-mapping-concepts.html
                               deviceName:
                                 description: Block device name
                                 type: string

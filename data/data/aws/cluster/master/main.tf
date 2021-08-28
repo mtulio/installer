@@ -163,15 +163,20 @@ resource "aws_instance" "master" {
     kms_key_id  = var.root_volume_kms_key_id == "" ? data.aws_ebs_default_kms_key.current.key_arn : var.root_volume_kms_key_id
   }
 
-  // TODO(mtulio): support ebsBlockDevices - get same values of root_block_device
-  ebs_block_device {
-    device_name = "/dev/xvdb"
-    volume_type = var.root_volume_type
-    volume_size = var.root_volume_size
-    iops        = var.root_volume_type == "io1" ? var.root_volume_iops : 0
-    encrypted   = var.root_volume_encrypted
-    kms_key_id  = var.root_volume_kms_key_id == "" ? data.aws_ebs_default_kms_key.current.key_arn : var.root_volume_kms_key_id
-  }
+  // TODO(mtulio): steps to support ebsBlockDevices
+  #ebs_block_device = var.ebs_block_devices
+  #ephemeral_block_devices = var.ephemeral_block_devices
+
+  // Uncomment to create a second block with same values of root_block_device
+  #ebs_block_device [{
+  #  device_name = "/dev/xvdb"
+  #  volume_type = var.root_volume_type
+  #  volume_size = var.root_volume_size
+  #  iops        = var.root_volume_type == "io1" ? var.root_volume_iops : 0
+  #  encrypted   = var.root_volume_encrypted
+  #  kms_key_id  = var.root_volume_kms_key_id == "" ? data.aws_ebs_default_kms_key.current.key_arn : var.root_volume_kms_key_id
+  #}]
+
 
   volume_tags = merge(
     {
