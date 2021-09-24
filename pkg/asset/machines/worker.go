@@ -84,7 +84,7 @@ var (
 func defaultAWSMachinePoolPlatform() awstypes.MachinePool {
 	return awstypes.MachinePool{
 		EC2RootVolume: awstypes.EC2RootVolume{
-			Type: "gp2",
+			Type: "gp3",
 			Size: 120,
 		},
 	}
