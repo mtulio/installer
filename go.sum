@@ -1412,6 +1412,12 @@ github.com/mozilla/tls-observatory v0.0.0-20190404164649-a3c1b6cfecfd/go.mod h1:
 github.com/mozilla/tls-observatory v0.0.0-20200220173314-aae45faa4006/go.mod h1:SrKMQvPiws7F7iqYp8/TX+IhxCYhzr6N/1yb8cwHsGk=
 github.com/mozilla/tls-observatory v0.0.0-20200317151703-4fa42e1c2dee/go.mod h1:SrKMQvPiws7F7iqYp8/TX+IhxCYhzr6N/1yb8cwHsGk=
 github.com/mtrmac/gpgme v0.1.2/go.mod h1:GYYHnGSuS7HK3zVS2n3y73y0okK/BeKzwnn5jgiVFNI=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211110194529-b93a5eb7ee85 h1:1t0azWLkFs3IfwOu5jnypfYvnZ0O8bWAr07hrbuYr+0=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211110194529-b93a5eb7ee85/go.mod h1:lout+16lD5DqaiAJ32DHvMjU1SGLqNRO3rfpMV2Tkkk=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211110234912-8bb6a7d3451b h1:ZQ1DqFypm93yxLLPjeDzhmWhiX4/+R0IjNCDSNXnYSI=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211110234912-8bb6a7d3451b/go.mod h1:0U3OgA2uDYSc7gNkdWA92+/BxWXwuYhWqqZ4UhM1RCw=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211111005605-66e1a671ead5 h1:xdUCtpYgjCv2oecYGRdR9b/gl32LAkeIM4UBnrjnmPg=
+github.com/mtulio/terraform-provider-aws v1.60.1-0.20211111005605-66e1a671ead5/go.mod h1:l9iYLu70jg5KXlxnmwoCJoIcBUqXZvLES3JZjrVlKys=
 github.com/munnerz/goautoneg v0.0.0-20120707110453-a547fc61f48d/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
