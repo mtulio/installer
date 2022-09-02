@@ -4,6 +4,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -79,14 +80,21 @@ func tagSharedVPCResources(ctx context.Context, clusterID string, installConfig 
 	}
 
 	if zone := installConfig.Config.AWS.HostedZone; zone != "" {
-		route53Client := route53.New(session)
-		if _, err := route53Client.ChangeTagsForResourceWithContext(ctx, &route53.ChangeTagsForResourceInput{
-			ResourceType: aws.String("hostedzone"),
-			ResourceId:   aws.String(zone),
-			AddTags:      []*route53.Tag{{Key: &tagKey, Value: &tagValue}},
-		}); err != nil {
-			return errors.Wrap(err, "could not add tags to hosted zone")
+		// valid values for platform.aws.hostedZone:
+		// - hostedZoneId : Route53 hosted zone id in the same account
+		// - Account/hostedZoneId : Route53 hosted zone id in the same account
+		// the installer will ignore to tag HostedZoneID in another account (not supported).
+		if zoneMeta := strings.Split(zone, "/"); len(zoneMeta) == 1 {
+			route53Client := route53.New(session)
+			if _, err := route53Client.ChangeTagsForResourceWithContext(ctx, &route53.ChangeTagsForResourceInput{
+				ResourceType: aws.String("hostedzone"),
+				ResourceId:   aws.String(zone),
+				AddTags:      []*route53.Tag{{Key: &tagKey, Value: &tagValue}},
+			}); err != nil {
+				return errors.Wrap(err, "could not add tags to hosted zone")
+			}
 		}
+
 	}
 
 	return nil
