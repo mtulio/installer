@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	machineapi "github.com/openshift/api/machine/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -26,6 +27,7 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 		total = *pool.Replicas
 	}
 	numOfAZs := int64(len(azs))
+	fmt.Println(azs, numOfAZs, total)
 	var machinesets []*machineapi.MachineSet
 	for idx, az := range mpool.Zones {
 		replicas := int32(total / numOfAZs)
@@ -54,6 +56,25 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 			return nil, errors.Wrap(err, "failed to create provider")
 		}
 		name := fmt.Sprintf("%s-%s-%s", clusterID, pool.Name, az)
+		spec := machineapi.MachineSpec{
+			ProviderSpec: machineapi.ProviderSpec{
+				Value: &runtime.RawExtension{Object: provider},
+			},
+		}
+		if pool.Name == "edge" {
+			spec.ObjectMeta = machineapi.ObjectMeta{
+				Labels: map[string]string{
+					"node-role.kubernetes.io/edge": "",
+				},
+			}
+			spec.Taints = []corev1.Taint{
+				{
+					Key:    "node-role.kubernetes.io/edge",
+					Effect: "NoSchedule",
+				},
+			}
+			//spec.ProviderSpec.Value.Public
+		}
 		mset := &machineapi.MachineSet{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "machine.openshift.io/v1beta1",
@@ -83,12 +104,8 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 							"machine.openshift.io/cluster-api-machine-type": role,
 						},
 					},
-					Spec: machineapi.MachineSpec{
-						ProviderSpec: machineapi.ProviderSpec{
-							Value: &runtime.RawExtension{Object: provider},
-						},
-						// we don't need to set Versions, because we control those via cluster operators.
-					},
+					Spec: spec,
+					// we don't need to set Versions, because we control those via cluster operators.
 				},
 			},
 		}

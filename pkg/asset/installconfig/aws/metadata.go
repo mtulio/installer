@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -18,6 +19,7 @@ type Metadata struct {
 	availabilityZones []string
 	privateSubnets    map[string]Subnet
 	publicSubnets     map[string]Subnet
+	edgeSubnets       map[string]Subnet
 	vpc               string
 	instanceTypes     map[string]InstanceType
 
@@ -74,6 +76,23 @@ func (m *Metadata) AvailabilityZones(ctx context.Context) ([]string, error) {
 	return m.availabilityZones, nil
 }
 
+// EdgeSubnets retrieves subnet metadata indexed by subnet ID, for
+// subnets that the cloud-provider logic considers to be edge
+// (i.e. Wavelength or Local Zone).
+func (m *Metadata) EdgeSubnets(ctx context.Context) (map[string]Subnet, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	err := m.populateSubnets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(">>>>>>>>>>>")
+	fmt.Println(m.edgeSubnets)
+	return m.edgeSubnets, nil
+}
+
 // PrivateSubnets retrieves subnet metadata indexed by subnet ID, for
 // subnets that the cloud-provider logic considers to be private
 // (i.e. not public).
@@ -118,7 +137,17 @@ func (m *Metadata) populateSubnets(ctx context.Context) error {
 		return err
 	}
 
-	m.vpc, m.privateSubnets, m.publicSubnets, err = subnets(ctx, session, m.Region, m.Subnets)
+	// m.vpc, m.privateSubnets, m.publicSubnets, err = subnets(ctx, session, m.Region, m.Subnets)
+	sb, err := subnets(ctx, session, m.Region, m.Subnets)
+	m.vpc = sb.VPC
+	m.privateSubnets = sb.Private
+	m.publicSubnets = sb.Public
+	m.edgeSubnets = sb.Edge
+	fmt.Println("populateSubnets() > ")
+	fmt.Println(m)
+	fmt.Printf("\n> public: %v", m.publicSubnets)
+	fmt.Printf("\n> private: %v", m.privateSubnets)
+	fmt.Printf("\n> edge: %v\n", m.edgeSubnets)
 	return err
 }
 

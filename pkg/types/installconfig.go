@@ -28,10 +28,13 @@ const (
 	// If you bump this, you must also update the list of convertable values in
 	// pkg/types/conversion/installconfig.go
 	InstallConfigVersion  = "v1"
-	workerMachinePoolName = "worker"
+	machinePoolNameWorker = "worker"
+	machinePoolNameEdge   = "edge"
 )
 
 var (
+	//machinePoolNames = [...]string{"worker", "edge"}
+
 	// PlatformNames is a slice with all the visibly-supported
 	// platform names in alphabetical order. This is the list of
 	// platforms presented to the user in the interactive wizard.
@@ -423,7 +426,11 @@ type Capabilities struct {
 // WorkerMachinePool retrieves the worker MachinePool from InstallConfig.Compute
 func (c *InstallConfig) WorkerMachinePool() *MachinePool {
 	for _, machinePool := range c.Compute {
-		if machinePool.Name == workerMachinePoolName {
+
+		if machinePool.Name == machinePoolNameEdge {
+			return &machinePool
+		}
+		if machinePool.Name == machinePoolNameWorker {
 			return &machinePool
 		}
 	}

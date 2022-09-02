@@ -51,6 +51,8 @@ import (
 
 const (
 	masterPoolName = "master"
+	workerPoolName = "worker"
+	edgePoolName   = "edge"
 )
 
 // list of known plugins that require hostPrefix to be set
@@ -438,13 +440,36 @@ func validateControlPlane(platform *types.Platform, pool *types.MachinePool, fld
 	return allErrs
 }
 
+func validateComputeEdge(platform *types.Platform, edgePool *types.MachinePool, fldPath *field.Path, pfld *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	platName := platform.Name()
+	validEdgePlatforms := []string{"aws"}
+	switch platName {
+	case aws.Name:
+		break
+	default:
+		allErrs = append(allErrs, field.NotSupported(pfld.Child("platform"), edgePool.Name, validEdgePlatforms))
+	}
+
+	return allErrs
+}
+
 func validateCompute(platform *types.Platform, control *types.MachinePool, pools []types.MachinePool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	poolNames := map[string]bool{}
+	validCompute := []string{workerPoolName, edgePoolName}
 	for i, p := range pools {
 		poolFldPath := fldPath.Index(i)
-		if p.Name != "worker" {
-			allErrs = append(allErrs, field.NotSupported(poolFldPath.Child("name"), p.Name, []string{"worker"}))
+		for _, name := range validCompute {
+			switch name {
+			case workerPoolName:
+				break
+			case edgePoolName:
+				allErrs = append(allErrs, validateComputeEdge(platform, &p, fldPath, poolFldPath)...)
+				break
+			default:
+				allErrs = append(allErrs, field.NotSupported(poolFldPath.Child("name"), p.Name, validCompute))
+			}
 		}
 		if poolNames[p.Name] {
 			allErrs = append(allErrs, field.Duplicate(poolFldPath.Child("name"), p.Name))
@@ -453,6 +478,7 @@ func validateCompute(platform *types.Platform, control *types.MachinePool, pools
 		if control != nil && control.Architecture != p.Architecture {
 			allErrs = append(allErrs, field.Invalid(poolFldPath.Child("architecture"), p.Architecture, "heteregeneous multi-arch is not supported; compute pool architecture must match control plane"))
 		}
+
 		allErrs = append(allErrs, ValidateMachinePool(platform, &p, poolFldPath)...)
 	}
 	return allErrs
