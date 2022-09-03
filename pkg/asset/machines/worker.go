@@ -305,14 +305,10 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 			// here?
 			subnets := map[string]string{}
 
-			fmt.Println(">>>")
-
 			if len(ic.Platform.AWS.Subnets) > 0 {
 				subnetMeta, err := installConfig.AWS.PrivateSubnets(ctx)
-				fmt.Printf(">>> subnetMeta=%v\n", subnetMeta)
-				if pool.Name == "edge" {
+				if pool.Name == types.InstallConfigPoolNameEdge {
 					subnetMeta, err = installConfig.AWS.EdgeSubnets(ctx)
-					fmt.Printf(">>> subnetMeta=%v\n", subnetMeta)
 				}
 				if err != nil {
 					return err

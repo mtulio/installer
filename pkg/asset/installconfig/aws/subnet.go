@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Subnets struct {
+type SubnetsGroups struct {
 	Public  map[string]Subnet
 	Private map[string]Subnet
 	Edge    map[string]Subnet
@@ -38,18 +38,12 @@ type Subnet struct {
 }
 
 // subnets retrieves metadata for the given subnet(s).
-func subnets(ctx context.Context, session *session.Session, region string, ids []string) (subnets Subnets, err error) {
-	zoneNames := make([]*string, len(ids))
-	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
+func subnets(ctx context.Context, session *session.Session, region string, ids []string) (subnets SubnetsGroups, err error) {
 
 	metas := make(map[string]Subnet, len(ids))
-	// private = map[string]Subnet{}
-	// public = map[string]Subnet{}
-	// edge = map[string]Subnet{}
-	// Public:  make(map[string]Subnet, len(ids)),
-	// Private: make(map[string]Subnet, len(ids)),
-	// Edge:    make(map[string]Subnet, len(ids)),
-	subnets = Subnets{
+	zoneNames := make([]*string, len(ids))
+	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
+	subnets = SubnetsGroups{
 		VPC:     "",
 		Public:  make(map[string]Subnet, len(ids)),
 		Private: make(map[string]Subnet, len(ids)),
@@ -90,7 +84,6 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 
 		if subnets.VPC == "" {
 			subnets.VPC = *subnet.VpcId
-			// vpc = *subnet.VpcId
 			vpcFromSubnet = *subnet.SubnetId
 		} else if *subnet.VpcId != subnets.VPC {
 			return subnets, errors.Errorf("all subnets must belong to the same VPC: %s is from %s, but %s is from %s", *subnet.SubnetId, *subnet.VpcId, vpcFromSubnet, subnets.VPC)
@@ -147,16 +140,13 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		}
 		meta.Public = isPublic
 		meta.ZoneType = *availabilityZones[meta.Zone].ZoneType
-		fmt.Println(meta.ZoneType)
+
 		// TODO: Add wavelength-zone when CarrierGateway will be supported on MachineSpec
 		if meta.ZoneType == "local-zone" {
-			// edge[id] = meta
 			subnets.Edge[id] = meta
 		} else if isPublic {
-			// public[id] = meta
 			subnets.Public[id] = meta
 		} else {
-			// private[id] = meta
 			subnets.Private[id] = meta
 		}
 	}

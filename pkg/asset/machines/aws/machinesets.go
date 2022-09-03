@@ -14,6 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+func isPublicSubnet(subnet string) bool {
+	return true
+}
+
 // MachineSets returns a list of machinesets for a machinepool.
 func MachineSets(clusterID string, region string, subnets map[string]string, pool *types.MachinePool, role, userDataSecret string, userTags map[string]string) ([]*machineapi.MachineSet, error) {
 	if poolPlatform := pool.Platform.Name(); poolPlatform != aws.Name {
@@ -27,31 +31,37 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 		total = *pool.Replicas
 	}
 	numOfAZs := int64(len(azs))
-	fmt.Println(azs, numOfAZs, total)
 	var machinesets []*machineapi.MachineSet
 	for idx, az := range mpool.Zones {
 		replicas := int32(total / numOfAZs)
 		if int64(idx) < total%numOfAZs {
 			replicas++
 		}
-
+		privateSubnet := true
+		if pool.Name == types.InstallConfigPoolNameEdge {
+			// FIXME Should check field from machinepool spec, like pool.Public, or from AZ Attribute
+			// TODO decide if we'll allow deploying nodes in Public Subnets when running in Local Zones (topology)
+			privateSubnet = false
+		}
 		subnet, ok := subnets[az]
 		if len(subnets) > 0 && !ok {
 			return nil, errors.Errorf("no subnet for zone %s", az)
 		}
-		provider, err := provider(
-			clusterID,
-			region,
-			subnet,
-			mpool.InstanceType,
-			&mpool.EC2RootVolume,
-			mpool.EC2Metadata,
-			mpool.AMIID,
-			az,
-			role,
-			userDataSecret,
-			userTags,
-		)
+		machineProviderInput := machineProviderInput{
+			clusterID:      clusterID,
+			region:         region,
+			subnet:         subnet,
+			instanceType:   mpool.InstanceType,
+			osImage:        mpool.AMIID,
+			zone:           az,
+			role:           role,
+			userDataSecret: userDataSecret,
+			root:           &mpool.EC2RootVolume,
+			imds:           mpool.EC2Metadata,
+			userTags:       userTags,
+			privateSubnet:  privateSubnet,
+		}
+		provider, err := provider(&machineProviderInput)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create provider")
 		}
@@ -61,7 +71,7 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 				Value: &runtime.RawExtension{Object: provider},
 			},
 		}
-		if pool.Name == "edge" {
+		if pool.Name == types.InstallConfigPoolNameEdge {
 			spec.ObjectMeta = machineapi.ObjectMeta{
 				Labels: map[string]string{
 					"node-role.kubernetes.io/edge": "",
@@ -73,7 +83,6 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 					Effect: "NoSchedule",
 				},
 			}
-			//spec.ProviderSpec.Value.Public
 		}
 		mset := &machineapi.MachineSet{
 			TypeMeta: metav1.TypeMeta{

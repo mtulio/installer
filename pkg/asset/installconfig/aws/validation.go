@@ -176,44 +176,31 @@ func validateSubnets(ctx context.Context, meta *Metadata, fldPath *field.Path, s
 
 func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Path, platform *awstypes.Platform, pool *awstypes.MachinePool, req resourceRequirements, poolName string) field.ErrorList {
 	allErrs := field.ErrorList{}
-	fmt.Println("DEBUG 1")
-	fmt.Println(poolName)
 	if len(pool.Zones) > 0 {
 		availableZones := sets.String{}
-		fmt.Println("DEBUG 2")
 		if len(platform.Subnets) > 0 {
 			subnets, err := meta.PrivateSubnets(ctx)
 			if poolName == "edge" {
 				subnets, err = meta.EdgeSubnets(ctx)
 			}
-			fmt.Println(subnets)
 			if err != nil {
 				return append(allErrs, field.InternalError(fldPath, err))
 			}
-			fmt.Println("DEBUG 2.5")
 			for _, subnet := range subnets {
 				availableZones.Insert(subnet.Zone)
 			}
 		} else {
-			fmt.Println("DEBUG 3")
 			allzones, err := meta.AvailabilityZones(ctx)
-			fmt.Println(allzones)
 			if err != nil {
 				return append(allErrs, field.InternalError(fldPath, err))
 			}
 			availableZones.Insert(allzones...)
 		}
-		fmt.Println("DEBUG 4")
-		fmt.Println(meta)
-		fmt.Println(pool.Zones)
-		fmt.Println(availableZones)
 		if diff := sets.NewString(pool.Zones...).Difference(availableZones); diff.Len() > 0 {
 			errMsg := fmt.Sprintf("No subnets provided for zones %s", diff.List())
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("zones"), pool.Zones, errMsg))
 		}
-		fmt.Println("DEBUG 4.3")
 	}
-	fmt.Println("DEBUG 5")
 	if pool.InstanceType != "" {
 		instanceTypes, err := meta.InstanceTypes(ctx)
 		if err != nil {

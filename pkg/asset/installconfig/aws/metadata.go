@@ -2,7 +2,6 @@ package aws
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -88,8 +87,6 @@ func (m *Metadata) EdgeSubnets(ctx context.Context) (map[string]Subnet, error) {
 		return nil, err
 	}
 
-	fmt.Println(">>>>>>>>>>>")
-	fmt.Println(m.edgeSubnets)
 	return m.edgeSubnets, nil
 }
 
@@ -137,17 +134,11 @@ func (m *Metadata) populateSubnets(ctx context.Context) error {
 		return err
 	}
 
-	// m.vpc, m.privateSubnets, m.publicSubnets, err = subnets(ctx, session, m.Region, m.Subnets)
 	sb, err := subnets(ctx, session, m.Region, m.Subnets)
 	m.vpc = sb.VPC
 	m.privateSubnets = sb.Private
 	m.publicSubnets = sb.Public
 	m.edgeSubnets = sb.Edge
-	fmt.Println("populateSubnets() > ")
-	fmt.Println(m)
-	fmt.Printf("\n> public: %v", m.publicSubnets)
-	fmt.Printf("\n> private: %v", m.privateSubnets)
-	fmt.Printf("\n> edge: %v\n", m.edgeSubnets)
 	return err
 }
 

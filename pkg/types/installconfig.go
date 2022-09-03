@@ -27,14 +27,13 @@ const (
 	// InstallConfigVersion is the version supported by this package.
 	// If you bump this, you must also update the list of convertable values in
 	// pkg/types/conversion/installconfig.go
-	InstallConfigVersion  = "v1"
-	machinePoolNameWorker = "worker"
-	machinePoolNameEdge   = "edge"
+	InstallConfigVersion        = "v1"
+	InstallConfigPoolNameMaster = "master"
+	InstallConfigPoolNameWorker = "worker"
+	InstallConfigPoolNameEdge   = "edge"
 )
 
 var (
-	//machinePoolNames = [...]string{"worker", "edge"}
-
 	// PlatformNames is a slice with all the visibly-supported
 	// platform names in alphabetical order. This is the list of
 	// platforms presented to the user in the interactive wizard.
@@ -426,11 +425,8 @@ type Capabilities struct {
 // WorkerMachinePool retrieves the worker MachinePool from InstallConfig.Compute
 func (c *InstallConfig) WorkerMachinePool() *MachinePool {
 	for _, machinePool := range c.Compute {
-
-		if machinePool.Name == machinePoolNameEdge {
-			return &machinePool
-		}
-		if machinePool.Name == machinePoolNameWorker {
+		switch machinePool.Name {
+		case InstallConfigPoolNameWorker, InstallConfigPoolNameEdge:
 			return &machinePool
 		}
 	}

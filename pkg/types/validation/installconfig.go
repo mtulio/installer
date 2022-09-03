@@ -49,12 +49,6 @@ import (
 	"github.com/openshift/installer/pkg/validate"
 )
 
-const (
-	masterPoolName = "master"
-	workerPoolName = "worker"
-	edgePoolName   = "edge"
-)
-
 // list of known plugins that require hostPrefix to be set
 var pluginsUsingHostPrefix = sets.NewString(string(operv1.NetworkTypeOpenShiftSDN), string(operv1.NetworkTypeOVNKubernetes))
 
@@ -430,8 +424,8 @@ func validateClusterNetwork(n *types.Networking, cn *types.ClusterNetworkEntry, 
 
 func validateControlPlane(platform *types.Platform, pool *types.MachinePool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if pool.Name != masterPoolName {
-		allErrs = append(allErrs, field.NotSupported(fldPath.Child("name"), pool.Name, []string{masterPoolName}))
+	if pool.Name != types.InstallConfigPoolNameMaster {
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("name"), pool.Name, []string{types.InstallConfigPoolNameMaster}))
 	}
 	if pool.Replicas != nil && *pool.Replicas == 0 {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("replicas"), pool.Replicas, "number of control plane replicas must be positive"))
@@ -457,14 +451,14 @@ func validateComputeEdge(platform *types.Platform, edgePool *types.MachinePool, 
 func validateCompute(platform *types.Platform, control *types.MachinePool, pools []types.MachinePool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	poolNames := map[string]bool{}
-	validCompute := []string{workerPoolName, edgePoolName}
+	validCompute := []string{types.InstallConfigPoolNameWorker, types.InstallConfigPoolNameEdge}
 	for i, p := range pools {
 		poolFldPath := fldPath.Index(i)
 		for _, name := range validCompute {
 			switch name {
-			case workerPoolName:
+			case types.InstallConfigPoolNameWorker:
 				break
-			case edgePoolName:
+			case types.InstallConfigPoolNameEdge:
 				allErrs = append(allErrs, validateComputeEdge(platform, &p, fldPath, poolFldPath)...)
 				break
 			default:

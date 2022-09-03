@@ -72,24 +72,3 @@ func localZones(ctx context.Context, session *session.Session, region string) ([
 
 	return zones, nil
 }
-
-// localZones retrieves a list of Local zones for the given parent region.
-func wavelengthZones(ctx context.Context, session *session.Session, region string) ([]string, error) {
-
-	azs, err := describeAvailabilityZones(ctx, session, region)
-	if err != nil {
-		return nil, errors.Wrap(err, "fetching availability zones")
-	}
-	zones := []string{}
-	for _, zone := range azs {
-		if *zone.ZoneType == "wavelength-zone" {
-			zones = append(zones, *zone.ZoneName)
-		}
-	}
-
-	if len(zones) == 0 {
-		return nil, errors.Errorf("no available zones type Wavelength in %s", region)
-	}
-
-	return zones, nil
-}
