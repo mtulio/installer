@@ -14,10 +14,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func isPublicSubnet(subnet string) bool {
-	return true
-}
-
 // MachineSets returns a list of machinesets for a machinepool.
 func MachineSets(clusterID string, region string, subnets map[string]string, pool *types.MachinePool, role, userDataSecret string, userTags map[string]string) ([]*machineapi.MachineSet, error) {
 	if poolPlatform := pool.Platform.Name(); poolPlatform != aws.Name {

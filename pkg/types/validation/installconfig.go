@@ -472,7 +472,6 @@ func validateCompute(platform *types.Platform, control *types.MachinePool, pools
 		if control != nil && control.Architecture != p.Architecture {
 			allErrs = append(allErrs, field.Invalid(poolFldPath.Child("architecture"), p.Architecture, "heteregeneous multi-arch is not supported; compute pool architecture must match control plane"))
 		}
-
 		allErrs = append(allErrs, ValidateMachinePool(platform, &p, poolFldPath)...)
 	}
 	return allErrs

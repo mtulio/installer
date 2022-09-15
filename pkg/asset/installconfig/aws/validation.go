@@ -180,7 +180,7 @@ func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Pat
 		availableZones := sets.String{}
 		if len(platform.Subnets) > 0 {
 			subnets, err := meta.PrivateSubnets(ctx)
-			if poolName == "edge" {
+			if poolName == types.InstallConfigPoolNameEdge {
 				subnets, err = meta.EdgeSubnets(ctx)
 			}
 			if err != nil {

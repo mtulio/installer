@@ -302,9 +302,7 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 				machineSets = append(machineSets, set)
 			}
 		case awstypes.Name:
-			// here?
 			subnets := map[string]string{}
-
 			if len(ic.Platform.AWS.Subnets) > 0 {
 				subnetMeta, err := installConfig.AWS.PrivateSubnets(ctx)
 				if pool.Name == types.InstallConfigPoolNameEdge {

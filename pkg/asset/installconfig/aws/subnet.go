@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	awstypes "github.com/openshift/installer/pkg/types/aws"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -142,7 +143,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		meta.ZoneType = *availabilityZones[meta.Zone].ZoneType
 
 		// TODO: Add wavelength-zone when CarrierGateway will be supported on MachineSpec
-		if meta.ZoneType == "local-zone" {
+		if meta.ZoneType == awstypes.AvailabilityZoneTypeLocal {
 			subnets.Edge[id] = meta
 		} else if isPublic {
 			subnets.Public[id] = meta

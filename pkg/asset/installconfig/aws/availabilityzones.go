@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	awstypes "github.com/openshift/installer/pkg/types/aws"
 	"github.com/pkg/errors"
 )
 
@@ -40,7 +41,7 @@ func availabilityZones(ctx context.Context, session *session.Session, region str
 	}
 	zones := []string{}
 	for _, zone := range azs {
-		if *zone.ZoneType == "availability-zone" {
+		if *zone.ZoneType == awstypes.AvailabilityZoneTypeDefault {
 			zones = append(zones, *zone.ZoneName)
 		}
 	}
@@ -57,17 +58,17 @@ func localZones(ctx context.Context, session *session.Session, region string) ([
 
 	azs, err := describeAvailabilityZones(ctx, session, region)
 	if err != nil {
-		return nil, errors.Wrap(err, "fetching availability zones")
+		return nil, errors.Wrap(err, "fetching availability zones type local-zone")
 	}
 	zones := []string{}
 	for _, zone := range azs {
-		if *zone.ZoneType == "local-zone" {
+		if *zone.ZoneType == awstypes.AvailabilityZoneTypeDefault {
 			zones = append(zones, *zone.ZoneName)
 		}
 	}
 
 	if len(zones) == 0 {
-		return nil, errors.Errorf("no available zones type Local in %s", region)
+		return nil, errors.Errorf("no availability zones type local-zone in %s", region)
 	}
 
 	return zones, nil
