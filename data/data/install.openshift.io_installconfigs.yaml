@@ -113,7 +113,7 @@ spec:
                 name:
                   description: Name is the name of the machine pool. For the control
                     plane machine pool, the name will always be "master". For the
-                    compute machine pools, the only valid name is "worker".
+                    compute machine pools, the valid names are "worker" and "edge".
                   type: string
                 platform:
                   description: Platform is configuration for machine pool specific
@@ -761,8 +761,8 @@ spec:
                 type: string
               name:
                 description: Name is the name of the machine pool. For the control
-                  plane machine pool, the name will always be "master". For the compute
-                  machine pools, the only valid name is "worker".
+                  plane machine pool, the name will always be "master". For the
+                    compute machine pools, the valid names are "worker" and "edge".
                 type: string
               platform:
                 description: Platform is configuration for machine pool specific to

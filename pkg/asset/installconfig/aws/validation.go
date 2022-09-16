@@ -49,12 +49,12 @@ func Validate(ctx context.Context, meta *Metadata, config *types.InstallConfig) 
 	allErrs = append(allErrs, validatePlatform(ctx, meta, field.NewPath("platform", "aws"), config.Platform.AWS, config.Networking, config.Publish)...)
 
 	if config.ControlPlane != nil && config.ControlPlane.Platform.AWS != nil {
-		allErrs = append(allErrs, validateMachinePool(ctx, meta, field.NewPath("controlPlane", "platform", "aws"), config.Platform.AWS, config.ControlPlane.Platform.AWS, controlPlaneReq)...)
+		allErrs = append(allErrs, validateMachinePool(ctx, meta, field.NewPath("controlPlane", "platform", "aws"), config.Platform.AWS, config.ControlPlane.Platform.AWS, controlPlaneReq, "")...)
 	}
 	for idx, compute := range config.Compute {
-		fldPath := field.NewPath("compute").Index(idx)
+		fldPath := field.NewPath(fmt.Sprintf("compute-%s", compute.Name)).Index(idx)
 		if compute.Platform.AWS != nil {
-			allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("platform", "aws"), config.Platform.AWS, compute.Platform.AWS, computeReq)...)
+			allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("platform", "aws"), config.Platform.AWS, compute.Platform.AWS, computeReq, compute.Name)...)
 		}
 	}
 	return allErrs.ToAggregate()
@@ -74,7 +74,7 @@ func validatePlatform(ctx context.Context, meta *Metadata, fldPath *field.Path, 
 		allErrs = append(allErrs, validateSubnets(ctx, meta, fldPath.Child("subnets"), platform.Subnets, networking, publish)...)
 	}
 	if platform.DefaultMachinePlatform != nil {
-		allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("defaultMachinePlatform"), platform, platform.DefaultMachinePlatform, controlPlaneReq)...)
+		allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("defaultMachinePlatform"), platform, platform.DefaultMachinePlatform, controlPlaneReq, "")...)
 	}
 	return allErrs
 }
@@ -174,16 +174,19 @@ func validateSubnets(ctx context.Context, meta *Metadata, fldPath *field.Path, s
 	return allErrs
 }
 
-func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Path, platform *awstypes.Platform, pool *awstypes.MachinePool, req resourceRequirements) field.ErrorList {
+func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Path, platform *awstypes.Platform, pool *awstypes.MachinePool, req resourceRequirements, poolName string) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if len(pool.Zones) > 0 {
 		availableZones := sets.String{}
 		if len(platform.Subnets) > 0 {
-			privateSubnets, err := meta.PrivateSubnets(ctx)
+			subnets, err := meta.PrivateSubnets(ctx)
+			if poolName == types.MachinePoolEdgeRoleName {
+				subnets, err = meta.EdgeSubnets(ctx)
+			}
 			if err != nil {
 				return append(allErrs, field.InternalError(fldPath, err))
 			}
-			for _, subnet := range privateSubnets {
+			for _, subnet := range subnets {
 				availableZones.Insert(subnet.Zone)
 			}
 		} else {
@@ -193,7 +196,6 @@ func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Pat
 			}
 			availableZones.Insert(allzones...)
 		}
-
 		if diff := sets.NewString(pool.Zones...).Difference(availableZones); diff.Len() > 0 {
 			errMsg := fmt.Sprintf("No subnets provided for zones %s", diff.List())
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("zones"), pool.Zones, errMsg))
