@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -35,7 +36,7 @@ func PreferredInstanceType(ctx context.Context, meta *awsconfig.Metadata, types 
 		}
 	}
 
-	return types[0], errors.New("no instance type found for the zone constraint")
+	return types[0], errors.New(fmt.Sprintf("no instance type found%v for the zone constraint%v", types, zones))
 }
 
 // FilterZonesBasedOnInstanceType return a filtered list of zones where the particular instance type is available. This is mainly necessary for ARM, where the instance type m6g is not

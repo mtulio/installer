@@ -6,14 +6,14 @@ import (
 )
 
 var (
-	defaultMachineClass = map[types.Architecture]map[string][]string{
+	defaultMachineTypes = map[types.Architecture]map[string][]string{
 		types.ArchitectureAMD64: {
 			// Example region default machine class override for AMD64:
-			// "ap-east-1":      {"m5", "m4"},
+			// "ap-east-1":      {"m6i.xlarge", "m5.xlarge"},
 		},
 		types.ArchitectureARM64: {
 			// Example region default machine class override for ARM64:
-			// "us-east-1":      {"m6g", "m6gd"},
+			// "us-east-1":      {"m6g.xlarge", "m6gd.xlarge"},
 		},
 	}
 )
@@ -22,10 +22,12 @@ var (
 func SetPlatformDefaults(p *aws.Platform) {
 }
 
-// InstanceClasses returns a list of instance "class", in decreasing priority order, which we should use for a given
-// region. Default is m6i then m5 unless a region override is defined in defaultMachineClass.
-func InstanceClasses(region string, arch types.Architecture) []string {
-	if classesForArch, ok := defaultMachineClass[arch]; ok {
+// InstanceTypes returns a list of instance types, in decreasing priority order, which we should use for a given
+// region. Default is m6i.xlarge, m5.xlarge, then lastly c5d.xlarge unless a region override
+// is defined in defaultMachineTypes.
+// c5d.xlarge is included on the list due the common availability for Local Zone offerings.
+func InstanceTypes(region string, arch types.Architecture) []string {
+	if classesForArch, ok := defaultMachineTypes[arch]; ok {
 		if classes, ok := classesForArch[region]; ok {
 			return classes
 		}
@@ -33,8 +35,8 @@ func InstanceClasses(region string, arch types.Architecture) []string {
 
 	switch arch {
 	case types.ArchitectureARM64:
-		return []string{"m6g"}
+		return []string{"m6g.xlarge"}
 	default:
-		return []string{"m6i", "m5"}
+		return []string{"m6i.xlarge", "m5.xlarge", "c5d.2xlarge"}
 	}
 }

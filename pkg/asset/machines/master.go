@@ -199,7 +199,7 @@ func (m *Master) Generate(dependencies asset.Parents) error {
 			}
 		}
 
-		mpool := defaultAWSMachinePoolPlatform()
+		mpool := defaultAWSMachinePoolPlatform("master")
 
 		osImage := strings.SplitN(string(*rhcosImage), ",", 2)
 		osImageID := osImage[0]
