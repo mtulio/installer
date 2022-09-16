@@ -88,10 +88,17 @@ var (
 	_ asset.WritableAsset = (*Worker)(nil)
 )
 
-func defaultAWSMachinePoolPlatform() awstypes.MachinePool {
+func defaultAWSMachinePoolPlatform(poolName string) awstypes.MachinePool {
+	defaultEBSType := "gp3"
+	// gp3 is not offered in all local-zones locations. Once it is available,
+	// it can be used as default for all machine pools.
+	// https://aws.amazon.com/about-aws/global-infrastructure/localzones/features
+	if poolName == types.MachinePoolEdgeRoleName {
+		defaultEBSType = "gp2"
+	}
 	return awstypes.MachinePool{
 		EC2RootVolume: awstypes.EC2RootVolume{
-			Type: "gp3",
+			Type: defaultEBSType,
 			Size: decimalRootVolumeSize,
 		},
 	}
@@ -184,10 +191,10 @@ func defaultNutanixMachinePoolPlatform() nutanixtypes.MachinePool {
 }
 
 func awsDefaultMachineTypes(region string, arch types.Architecture) []string {
-	classes := awsdefaults.InstanceClasses(region, arch)
-	types := make([]string, len(classes))
-	for i, c := range classes {
-		types[i] = fmt.Sprintf("%s.xlarge", c)
+	dTypes := awsdefaults.InstanceTypes(region, arch)
+	types := make([]string, len(dTypes))
+	for i, t := range dTypes {
+		types[i] = t
 	}
 	return types
 }
@@ -305,6 +312,9 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 			subnets := map[string]string{}
 			if len(ic.Platform.AWS.Subnets) > 0 {
 				subnetMeta, err := installConfig.AWS.PrivateSubnets(ctx)
+				if pool.Name == types.MachinePoolEdgeRoleName {
+					subnetMeta, err = installConfig.AWS.EdgeSubnets(ctx)
+				}
 				if err != nil {
 					return err
 				}
@@ -313,7 +323,7 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 				}
 			}
 
-			mpool := defaultAWSMachinePoolPlatform()
+			mpool := defaultAWSMachinePoolPlatform(pool.Name)
 
 			osImage := strings.SplitN(string(*rhcosImage), ",", 2)
 			osImageID := osImage[0]
@@ -339,10 +349,11 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 				}
 			}
 			if mpool.InstanceType == "" {
-				mpool.InstanceType, err = aws.PreferredInstanceType(ctx, installConfig.AWS, awsDefaultMachineTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture), mpool.Zones)
+				instanceTypes := awsDefaultMachineTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture)
+				mpool.InstanceType, err = aws.PreferredInstanceType(ctx, installConfig.AWS, instanceTypes, mpool.Zones)
 				if err != nil {
 					logrus.Warn(errors.Wrap(err, "failed to find default instance type"))
-					mpool.InstanceType = awsDefaultMachineTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture)[0]
+					mpool.InstanceType = instanceTypes[0]
 				}
 			}
 			// if the list of zones is the default we need to try to filter the list in case there are some zones where the instance might not be available

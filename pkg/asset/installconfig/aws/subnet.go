@@ -9,9 +9,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	awstypes "github.com/openshift/installer/pkg/types/aws"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+type SubnetsGroups struct {
+	Public  map[string]Subnet
+	Private map[string]Subnet
+	Edge    map[string]Subnet
+	VPC     string
+}
 
 // Subnet holds metadata for a subnet.
 type Subnet struct {
@@ -23,13 +31,27 @@ type Subnet struct {
 
 	// CIDR is the subnet's CIDR block.
 	CIDR string
+
+	// ZoneType is the type of subnet's availability zone.
+	ZoneType string
+
+	// Public is the flag to define the subnet public.
+	Public bool
 }
 
 // subnets retrieves metadata for the given subnet(s).
-func subnets(ctx context.Context, session *session.Session, region string, ids []string) (vpc string, private map[string]Subnet, public map[string]Subnet, err error) {
+func subnets(ctx context.Context, session *session.Session, region string, ids []string) (subnets SubnetsGroups, err error) {
+
 	metas := make(map[string]Subnet, len(ids))
-	private = map[string]Subnet{}
-	public = map[string]Subnet{}
+	zoneNames := make([]*string, len(ids))
+	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
+	subnets = SubnetsGroups{
+		VPC:     "",
+		Public:  make(map[string]Subnet, len(ids)),
+		Private: make(map[string]Subnet, len(ids)),
+		Edge:    make(map[string]Subnet, len(ids)),
+	}
+
 	var vpcFromSubnet string
 	client := ec2.New(session, aws.NewConfig().WithRegion(region))
 
@@ -81,7 +103,10 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		err = lastError
 	}
 	if err != nil {
-		return vpc, nil, nil, errors.Wrap(err, "describing subnets")
+		return subnets, errors.Wrap(err, "describing subnets")
+	}
+	if err != nil {
+		return subnets, errors.Wrap(err, "describing subnets")
 	}
 
 	var routeTables []*ec2.RouteTable
@@ -90,7 +115,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		&ec2.DescribeRouteTablesInput{
 			Filters: []*ec2.Filter{{
 				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(vpc)},
+				Values: []*string{aws.String(subnets.VPC)},
 			}},
 		},
 		func(results *ec2.DescribeRouteTablesOutput, lastPage bool) bool {
@@ -99,7 +124,20 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		},
 	)
 	if err != nil {
-		return vpc, nil, nil, errors.Wrap(err, "describing route tables")
+		return subnets, errors.Wrap(err, "describing route tables")
+	}
+
+	azs, err := client.DescribeAvailabilityZonesWithContext(
+		ctx,
+		&ec2.DescribeAvailabilityZonesInput{
+			ZoneNames: zoneNames,
+		},
+	)
+	if err != nil {
+		return subnets, errors.Wrap(err, "describing availability zones")
+	}
+	for _, az := range azs.AvailabilityZones {
+		availabilityZones[*az.ZoneName] = az
 	}
 
 	publicOnlySubnets := os.Getenv("OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY") != ""
@@ -107,17 +145,23 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 	for _, id := range ids {
 		meta, ok := metas[id]
 		if !ok {
-			return vpc, nil, nil, errors.Errorf("failed to find %s", id)
+			return subnets, errors.Errorf("failed to find %s", id)
 		}
 
 		isPublic, err := isSubnetPublic(routeTables, id)
 		if err != nil {
-			return vpc, nil, nil, err
+			return subnets, err
 		}
-		if isPublic {
-			public[id] = meta
+		meta.Public = isPublic
+		meta.ZoneType = *availabilityZones[meta.Zone].ZoneType
+
+		// TODO: Add wavelength-zone when CarrierGateway will be supported on MachineSpec
+		if meta.ZoneType == awstypes.AvailabilityZoneTypeLocal {
+			subnets.Edge[id] = meta
+		} else if isPublic {
+			subnets.Public[id] = meta
 		} else {
-			private[id] = meta
+			subnets.Private[id] = meta
 		}
 
 		// Let public subnets work as if they were private. This allows us to
@@ -130,7 +174,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		}
 	}
 
-	return vpc, private, public, nil
+	return subnets, nil
 }
 
 // https://github.com/kubernetes/kubernetes/blob/9f036cd43d35a9c41d7ac4ca82398a6d0bef957b/staging/src/k8s.io/legacy-cloud-providers/aws/aws.go#L3376-L3419
