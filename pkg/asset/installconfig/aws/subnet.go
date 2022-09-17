@@ -21,8 +21,13 @@ type SubnetsGroups struct {
 	VPC     string
 }
 
+type Subnets map[string]Subnet
+
 // Subnet holds metadata for a subnet.
 type Subnet struct {
+	// ID is the subnet's Identifier.
+	ID string
+
 	// ARN is the subnet's Amazon Resource Name.
 	ARN string
 
@@ -33,10 +38,25 @@ type Subnet struct {
 	CIDR string
 
 	// ZoneType is the type of subnet's availability zone.
+	// The valid values are availability-zone, local-zone, and
+	// wavelength-zone.
 	ZoneType string
+
+	// ZoneGroup is the group of subnet's availability zone is part of.
+	// For Availability Zones, this parameter has the same value as the Region name.
+	//
+	// For Local Zones, the name of the associated group, for example us-west-2-lax-1.
+	//
+	// For Wavelength Zones, the name of the associated group, for example us-east-1-wl1-bos-wlz-1.
+	ZoneGroup string
 
 	// Public is the flag to define the subnet public.
 	Public bool
+
+	// PreferredInstanceType is the preferred instance type on the subnet's zone.
+	// It's used for edge pools which usually does not have the same availability
+	// across zone groups.
+	PreferredInstanceType string
 }
 
 // subnets retrieves metadata for the given subnet(s).
@@ -45,12 +65,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 	metas := make(map[string]Subnet, len(ids))
 	zoneNames := make([]*string, len(ids))
 	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
-	subnets = SubnetsGroups{
-		VPC:     "",
-		Public:  make(map[string]Subnet, len(ids)),
-		Private: make(map[string]Subnet, len(ids)),
-		Edge:    make(map[string]Subnet, len(ids)),
-	}
+	subnets = SubnetsGroups{}
 
 	var vpcFromSubnet string
 	client := ec2.New(session, aws.NewConfig().WithRegion(region))
@@ -105,9 +120,6 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 	if err != nil {
 		return subnets, errors.Wrap(err, "describing subnets")
 	}
-	if err != nil {
-		return subnets, errors.Wrap(err, "describing subnets")
-	}
 
 	var routeTables []*ec2.RouteTable
 	err = client.DescribeRouteTablesPagesWithContext(
@@ -154,14 +166,25 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		}
 		meta.Public = isPublic
 		meta.ZoneType = *availabilityZones[meta.Zone].ZoneType
+		meta.ZoneGroup = *availabilityZones[meta.Zone].GroupName
 
-		// TODO: Add wavelength-zone when CarrierGateway will be supported on MachineSpec
 		if meta.ZoneType == awstypes.AvailabilityZoneTypeLocal {
+			// Local Zones is supported only in Public subnets
+			if !meta.Public {
+				return subnets, errors.Errorf("Local Zones subnets must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
+			}
+			if subnets.Edge == nil {
+				subnets.Edge = make(map[string]Subnet, len(ids))
+			}
 			subnets.Edge[id] = meta
-		} else if isPublic {
+			continue
+		}
+		if meta.Public {
+			if subnets.Public == nil {
+				subnets.Public = make(map[string]Subnet, len(ids))
+			}
 			subnets.Public[id] = meta
-		} else {
-			subnets.Private[id] = meta
+			continue
 		}
 
 		// Let public subnets work as if they were private. This allows us to
@@ -172,8 +195,11 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		if publicOnlySubnets && isPublic {
 			private[id] = meta
 		}
+		if subnets.Private == nil {
+			subnets.Private = make(map[string]Subnet, len(ids))
+		}
+		subnets.Private[id] = meta
 	}
-
 	return subnets, nil
 }
 

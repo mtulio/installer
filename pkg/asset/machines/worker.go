@@ -24,12 +24,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 	openstackapi "sigs.k8s.io/cluster-api-provider-openstack/pkg/apis"
 	openstackprovider "sigs.k8s.io/cluster-api-provider-openstack/pkg/apis/openstackproviderconfig/v1alpha1"
 
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/ignition/machine"
 	"github.com/openshift/installer/pkg/asset/installconfig"
+	icaws "github.com/openshift/installer/pkg/asset/installconfig/aws"
 	icazure "github.com/openshift/installer/pkg/asset/installconfig/azure"
 	"github.com/openshift/installer/pkg/asset/machines/alibabacloud"
 	"github.com/openshift/installer/pkg/asset/machines/aws"
@@ -89,12 +91,13 @@ var (
 )
 
 func defaultAWSMachinePoolPlatform(poolName string) awstypes.MachinePool {
-	defaultEBSType := "gp3"
-	// gp3 is not offered in all local-zones locations. Once it is available,
-	// it can be used as default for all machine pools.
+	defaultEBSType := awstypes.Ec2EbsGp3VolumeType
+
+	// gp3 is not offered in all local-zones locations used by Edge Pools.
+	//  Once it is available it can be used as default for all machine pools.
 	// https://aws.amazon.com/about-aws/global-infrastructure/localzones/features
 	if poolName == types.MachinePoolEdgeRoleName {
-		defaultEBSType = "gp2"
+		defaultEBSType = awstypes.Ec2EbsGp2VolumeType
 	}
 	return awstypes.MachinePool{
 		EC2RootVolume: awstypes.EC2RootVolume{
@@ -193,10 +196,33 @@ func defaultNutanixMachinePoolPlatform() nutanixtypes.MachinePool {
 func awsDefaultMachineTypes(region string, arch types.Architecture) []string {
 	dTypes := awsdefaults.InstanceTypes(region, arch)
 	types := make([]string, len(dTypes))
-	for i, t := range dTypes {
-		types[i] = t
+	for i, itype := range dTypes {
+		types[i] = itype
 	}
 	return types
+}
+
+// awsDiscoveryPreferredInstanceEdgePool discovery supported instanceType for each subnet's
+// Availability Zone from the preferred list of instances allowed for OCP.
+func awsDiscoveryPreferredInstanceEdgePool(ctx context.Context, defaultTypes []string, meta *icaws.Metadata, subnets *icaws.Subnets) (err error) {
+	for zone := range *subnets {
+		subnet, ok := (*subnets)[zone]
+		if !ok {
+			errMsg := fmt.Sprintf("failed to get subnet's zone[%v] to lookup preferred instance type.", zone)
+			logrus.Warn(errors.Wrap(err, errMsg))
+			continue
+		}
+
+		preferredType, err := aws.PreferredInstanceType(ctx, meta, defaultTypes, []string{zone})
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to find preferred instance type by zone[%v]. Using default %s", zone, defaultTypes[0])
+			logrus.Warn(errors.Wrap(err, errMsg))
+			continue
+		}
+		subnet.PreferredInstanceType = preferredType
+		(*subnets)[zone] = subnet
+	}
+	return nil
 }
 
 // Worker generates the machinesets for `worker` machine pool.
@@ -309,17 +335,26 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 				machineSets = append(machineSets, set)
 			}
 		case awstypes.Name:
-			subnets := map[string]string{}
+			subnets := make(icaws.Subnets, len(ic.Platform.AWS.Subnets))
 			if len(ic.Platform.AWS.Subnets) > 0 {
-				subnetMeta, err := installConfig.AWS.PrivateSubnets(ctx)
-				if pool.Name == types.MachinePoolEdgeRoleName {
+				subnetMeta := make(map[string]icaws.Subnet, len(ic.Platform.AWS.Subnets))
+				switch pool.Name {
+				case types.MachinePoolEdgeRoleName:
 					subnetMeta, err = installConfig.AWS.EdgeSubnets(ctx)
+					if err != nil {
+						return err
+					}
+					if *pool.Replicas == 0 {
+						pool.Replicas = pointer.Int64Ptr(int64(len(subnetMeta)))
+					}
+				default:
+					subnetMeta, err = installConfig.AWS.PrivateSubnets(ctx)
+					if err != nil {
+						return err
+					}
 				}
-				if err != nil {
-					return err
-				}
-				for id, subnet := range subnetMeta {
-					subnets[subnet.Zone] = id
+				for _, subnet := range subnetMeta {
+					subnets[subnet.Zone] = subnet
 				}
 			}
 
@@ -348,14 +383,27 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 					zoneDefaults = true
 				}
 			}
+
 			if mpool.InstanceType == "" {
 				instanceTypes := awsDefaultMachineTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture)
-				mpool.InstanceType, err = aws.PreferredInstanceType(ctx, installConfig.AWS, instanceTypes, mpool.Zones)
-				if err != nil {
-					logrus.Warn(errors.Wrap(err, "failed to find default instance type"))
-					mpool.InstanceType = instanceTypes[0]
+
+				switch pool.Name {
+				case types.MachinePoolEdgeRoleName:
+					err = awsDiscoveryPreferredInstanceEdgePool(ctx, instanceTypes, installConfig.AWS, &subnets)
+					if err != nil {
+						logrus.Warn(errors.Wrap(err, "failed to find default instance type for edge pool"))
+						mpool.InstanceType = instanceTypes[0]
+					}
+					break
+				default:
+					mpool.InstanceType, err = aws.PreferredInstanceType(ctx, installConfig.AWS, instanceTypes, mpool.Zones)
+					if err != nil {
+						logrus.Warn(errors.Wrap(err, "failed to find default instance type"))
+						mpool.InstanceType = instanceTypes[0]
+					}
 				}
 			}
+
 			// if the list of zones is the default we need to try to filter the list in case there are some zones where the instance might not be available
 			if zoneDefaults {
 				mpool.Zones, err = aws.FilterZonesBasedOnInstanceType(ctx, installConfig.AWS, mpool.InstanceType, mpool.Zones)
@@ -363,14 +411,13 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 					logrus.Warn(errors.Wrap(err, "failed to filter zone list"))
 				}
 			}
-
 			pool.Platform.AWS = &mpool
 			sets, err := aws.MachineSets(
 				clusterID.InfraID,
 				installConfig.Config.Platform.AWS.Region,
-				subnets,
+				&subnets,
 				&pool,
-				"worker",
+				pool.Name,
 				workerUserDataSecretName,
 				installConfig.Config.Platform.AWS.UserTags,
 			)

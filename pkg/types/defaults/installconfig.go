@@ -71,8 +71,15 @@ func SetInstallConfigDefaults(c *types.InstallConfig) {
 	}
 	c.ControlPlane.Name = "master"
 	SetMachinePoolDefaults(c.ControlPlane, c.Platform.Name())
-	if len(c.Compute) == 0 {
-		c.Compute = []types.MachinePool{{Name: "worker"}}
+
+	defaultComputePoolUndefined := true
+	for _, compute := range c.Compute {
+		if compute.Name == types.MachinePoolComputeRoleName {
+			defaultComputePoolUndefined = false
+		}
+	}
+	if defaultComputePoolUndefined {
+		c.Compute = append(c.Compute, types.MachinePool{Name: types.MachinePoolComputeRoleName})
 	}
 	for i := range c.Compute {
 		SetMachinePoolDefaults(&c.Compute[i], c.Platform.Name())

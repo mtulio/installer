@@ -52,24 +52,3 @@ func availabilityZones(ctx context.Context, session *session.Session, region str
 
 	return zones, nil
 }
-
-// localZones retrieves a list of Local zones for the given parent region.
-func localZones(ctx context.Context, session *session.Session, region string) ([]string, error) {
-
-	azs, err := describeAvailabilityZones(ctx, session, region)
-	if err != nil {
-		return nil, errors.Wrap(err, "fetching availability zones type local-zone")
-	}
-	zones := []string{}
-	for _, zone := range azs {
-		if *zone.ZoneType == awstypes.AvailabilityZoneTypeDefault {
-			zones = append(zones, *zone.ZoneName)
-		}
-	}
-
-	if len(zones) == 0 {
-		return nil, errors.Errorf("no availability zones type local-zone in %s", region)
-	}
-
-	return zones, nil
-}

@@ -32,7 +32,8 @@ Table of Contents:
     - [Destroy the cluster](#uninstall-destroy-cluster)
     - [Destroy the Local Zone subnet](#uninstall-destroy-subnet)
     - [Destroy the VPC](#uninstall-destroy-vpc)
-
+- [Use Cases](#use-cases)
+    - [User-workload ingress traffic](#uc-exposing-ingress)
 ___
 
 To install a cluster in existing VPC with Local Zone subnets, you should provision the network resources and then add the subnet IDs to the `install-config.yaml`.
@@ -44,7 +45,7 @@ To install a cluster in existing VPC with Local Zone subnets, you should provisi
 - environment variables exported
 
 ```bash
-export CLUSTER_NAME="ipi-localzone"
+export CLUSTER_NAME="ipi-localzones"
 
 # AWS Region and extra Local Zone group Information
 export AWS_REGION="us-west-2"
@@ -84,7 +85,7 @@ aws cloudformation create-stack \
         ParameterKey=AvailabilityZoneCount,ParameterValue=${VPC_SUBNETS_COUNT}
 ```
 
-Check the Stack:
+- Check the Stack status:
 
 ```bash
 aws cloudformation describe-stacks \
@@ -92,7 +93,18 @@ aws cloudformation describe-stacks \
     --stack-name ${CLUSTER_NAME}-vpc 
 ```
 
-Extract the subnets IDs to the environment variable list `SUBNETS`:
+- Wait for the stack execution be finished: `StackStatus=CREATE_COMPLETE`.
+
+- Export the VPC ID:
+
+```bash
+export VPC_ID=$(aws cloudformation describe-stacks \
+  --region us-west-2 \
+  --stack-name ${CLUSTER_NAME}-vpc \
+  | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="VpcId").OutputValue' )
+```
+
+- Extract the subnets IDs to the environment variable list `SUBNETS`:
 
 ```bash
 mapfile -t SUBNETS < <(aws cloudformation describe-stacks \
@@ -105,16 +117,7 @@ mapfile -t -O "${#SUBNETS[@]}" SUBNETS < <(aws cloudformation describe-stacks \
   | jq -r '.Stacks[0].Outputs[1].OutputValue' | tr ',' '\n')
 ```
 
-Export the VPC ID:
-
-```bash
-export VPC_ID=$(aws cloudformation describe-stacks \
-  --region us-west-2 \
-  --stack-name ${CLUSTER_NAME}-vpc \
-  | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="VpcId").OutputValue' )
-```
-
-Export the Public Route Table ID:
+- Export the Public Route Table ID:
 
 ```bash
 export PUBLIC_RTB_ID=$(aws cloudformation describe-stacks \
@@ -123,7 +126,7 @@ export PUBLIC_RTB_ID=$(aws cloudformation describe-stacks \
   | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="PublicRouteTableId").OutputValue' )
 ```
 
-Make sure all variables were set:
+- Make sure all variables have been correctly set:
 
 ```bash
 echo "SUBNETS=${SUBNETS[*]}
@@ -183,6 +186,8 @@ aws cloudformation describe-stacks \
   --stack-name ${SUBNET_NAME}
 ```
 
+- Wait for the stack execution be finished: `StackStatus=CREATE_COMPLETE`.
+
 - Export the Local Zone subnet ID
 
 ```bash
@@ -224,7 +229,7 @@ Create the `install-config.yaml` providing the subnet IDs recently created:
 - create the `install-config`
 
 ```bash
-$ ./openshift-install-2022091601 create install-config --dir ${CLUSTER_NAME}
+$ ./openshift-install create install-config --dir ${CLUSTER_NAME}
 ? SSH Public Key /home/user/.ssh/id_rsa.pub
 ? Platform aws
 ? Region us-west-2
@@ -395,6 +400,24 @@ aws cloudformation delete-stack \
     --region ${AWS_REGION} \
     --stack-name ${CLUSTER_NAME}-vpc
 ```
+
+## Use Cases <a name="use-cases"></a>
+
+### User-workload ingress traffic <a name="uc-exposing-ingress"></a>
+
+To expose the applications to the internet on AWS Local Zones, application developers
+must expose their applications using AWS Application Load Balancers (ALB). The
+[ALB Operator](https://docs.openshift.com/container-platform/4.11/networking/aws_load_balancer_operator/install-aws-load-balancer-operator.html) is available through OLM on 4.11+.
+
+To explore the best of deploying applications on the edge locations, at least one new
+ALB `Ingress` must be provisioned by location to expose the services deployed on the
+zones.
+
+If the cluster-admin decides to share the ALB `Ingress` subnets between different locations,
+it will impact drastically the latency for the end-users when the traffic is routed to
+backends (compute nodes) placed in different zones that the traffic entered by Ingress.
+
+The ALB deployment is not covered by this documentation.
 
 [openshift-install]: https://docs.openshift.com/container-platform/4.11/installing/index.html
 [aws-cli]: https://aws.amazon.com/cli/
