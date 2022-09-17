@@ -2,6 +2,12 @@ package aws
 
 import "github.com/aws/aws-sdk-go/aws/endpoints"
 
+const (
+	// Ec2EbsVolumeGp2
+	Ec2EbsGp2VolumeType = "gp2"
+	Ec2EbsGp3VolumeType = "gp3"
+)
+
 // Platform stores all the global configuration that all machinesets
 // use.
 type Platform struct {

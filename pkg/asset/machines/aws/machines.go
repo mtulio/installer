@@ -169,7 +169,6 @@ func Machines(clusterID string, region string, subnets map[string]string, pool *
 	return machines, controlPlaneMachineSet, nil
 }
 
-//func provider(clusterID string, region string, subnet string, instanceType string, root *aws.EC2RootVolume, imds aws.EC2Metadata, osImage string, zone, role, userDataSecret string, userTags map[string]string, privateSubnet bool) (*machineapi.AWSMachineProviderConfig, error) {
 func provider(in *machineProviderInput) (*machineapi.AWSMachineProviderConfig, error) {
 	tags, err := tagsFromUserTags(in.clusterID, in.userTags)
 	if err != nil {

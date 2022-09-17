@@ -430,13 +430,11 @@ func validateControlPlane(platform *types.Platform, pool *types.MachinePool, fld
 
 func validateComputeEdge(platform *types.Platform, p *types.MachinePool, fldPath *field.Path, pfld *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	platName := platform.Name()
-	validEdgePlatforms := []string{"aws"}
-	switch platName {
+	switch platform.Name() {
 	case aws.Name:
 		break
 	default:
-		allErrs = append(allErrs, field.NotSupported(pfld.Child("platform"), p.Name, validEdgePlatforms))
+		allErrs = append(allErrs, field.NotSupported(pfld.Child("name"), p.Name, []string{types.MachinePoolComputeRoleName}))
 	}
 
 	return allErrs
@@ -445,23 +443,18 @@ func validateComputeEdge(platform *types.Platform, p *types.MachinePool, fldPath
 func validateCompute(platform *types.Platform, control *types.MachinePool, pools []types.MachinePool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	poolNames := map[string]bool{}
-	validCompute := []string{
-		types.MachinePoolComputeRoleName,
-		types.MachinePoolEdgeRoleName,
-	}
 	for i, p := range pools {
 		poolFldPath := fldPath.Index(i)
-		for _, name := range validCompute {
-			switch name {
-			case types.MachinePoolComputeRoleName:
-				break
-			case types.MachinePoolEdgeRoleName:
-				allErrs = append(allErrs, validateComputeEdge(platform, &p, fldPath, poolFldPath)...)
-				break
-			default:
-				allErrs = append(allErrs, field.NotSupported(poolFldPath.Child("name"), p.Name, validCompute))
-			}
+		switch p.Name {
+		case types.MachinePoolComputeRoleName:
+			break
+		case types.MachinePoolEdgeRoleName:
+			allErrs = append(allErrs, validateComputeEdge(platform, &p, poolFldPath, poolFldPath)...)
+			break
+		default:
+			allErrs = append(allErrs, field.NotSupported(poolFldPath.Child("name"), p.Name, []string{types.MachinePoolComputeRoleName, types.MachinePoolEdgeRoleName}))
 		}
+
 		if poolNames[p.Name] {
 			allErrs = append(allErrs, field.Duplicate(poolFldPath.Child("name"), p.Name))
 		}

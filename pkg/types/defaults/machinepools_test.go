@@ -18,6 +18,12 @@ func defaultMachinePool(name string) *types.MachinePool {
 	}
 }
 
+func defaultEdgeMachinePool(name string) *types.MachinePool {
+	pool := defaultMachinePool(name)
+	pool.Replicas = pointer.Int64Ptr(0)
+	return pool
+}
+
 func TestSetMahcinePoolDefaults(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -31,9 +37,19 @@ func TestSetMahcinePoolDefaults(t *testing.T) {
 			expected: defaultMachinePool(""),
 		},
 		{
+			name:     "empty",
+			pool:     &types.MachinePool{Replicas: pointer.Int64Ptr(0)},
+			expected: defaultEdgeMachinePool(""),
+		},
+		{
 			name:     "default",
 			pool:     defaultMachinePool("test-name"),
 			expected: defaultMachinePool("test-name"),
+		},
+		{
+			name:     "default",
+			pool:     defaultEdgeMachinePool("test-name"),
+			expected: defaultEdgeMachinePool("test-name"),
 		},
 		{
 			name: "non-default replicas",
@@ -44,6 +60,19 @@ func TestSetMahcinePoolDefaults(t *testing.T) {
 			}(),
 			expected: func() *types.MachinePool {
 				p := defaultMachinePool("test-name")
+				p.Replicas = pointer.Int64Ptr(5)
+				return p
+			}(),
+		},
+		{
+			name: "non-default replicas",
+			pool: func() *types.MachinePool {
+				p := defaultEdgeMachinePool("test-name")
+				p.Replicas = pointer.Int64Ptr(5)
+				return p
+			}(),
+			expected: func() *types.MachinePool {
+				p := defaultEdgeMachinePool("test-name")
 				p.Replicas = pointer.Int64Ptr(5)
 				return p
 			}(),
@@ -67,6 +96,19 @@ func TestSetMahcinePoolDefaults(t *testing.T) {
 			}(),
 			expected: func() *types.MachinePool {
 				p := defaultMachinePool("test-name")
+				p.Hyperthreading = types.HyperthreadingMode("test-hyperthreading")
+				return p
+			}(),
+		},
+		{
+			name: "non-default hyperthreading",
+			pool: func() *types.MachinePool {
+				p := defaultEdgeMachinePool("test-name")
+				p.Hyperthreading = types.HyperthreadingMode("test-hyperthreading")
+				return p
+			}(),
+			expected: func() *types.MachinePool {
+				p := defaultEdgeMachinePool("test-name")
 				p.Hyperthreading = types.HyperthreadingMode("test-hyperthreading")
 				return p
 			}(),

@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	machineapi "github.com/openshift/api/machine/v1beta1"
+	icaws "github.com/openshift/installer/pkg/asset/installconfig/aws"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/openshift/installer/pkg/types"
@@ -15,7 +17,7 @@ import (
 )
 
 // MachineSets returns a list of machinesets for a machinepool.
-func MachineSets(clusterID string, region string, subnets map[string]string, pool *types.MachinePool, role, userDataSecret string, userTags map[string]string) ([]*machineapi.MachineSet, error) {
+func MachineSets(clusterID string, region string, subnets *icaws.Subnets, pool *types.MachinePool, role, userDataSecret string, userTags map[string]string) ([]*machineapi.MachineSet, error) {
 	if poolPlatform := pool.Platform.Name(); poolPlatform != aws.Name {
 		return nil, fmt.Errorf("non-AWS machine-pool: %q", poolPlatform)
 	}
@@ -33,24 +35,39 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 		if int64(idx) < total%numOfAZs {
 			replicas++
 		}
-		privateSubnet := true
-		if pool.Name == types.MachinePoolEdgeRoleName {
-			// FIXME Should check field from machinepool spec, like pool.Public, or from AZ Attribute
-			// TODO decide if we'll allow deploying nodes in Public Subnets when running in Local Zones (topology)
-			privateSubnet = false
-		}
-		subnet, ok := subnets[az]
-		if len(subnets) > 0 && !ok {
+		subnet, ok := (*subnets)[az]
+		if len(*subnets) > 0 && !ok {
 			return nil, errors.Errorf("no subnet for zone %s", az)
 		}
+
+		privateSubnet := !subnet.Public
+		instanceType := mpool.InstanceType
+		nodeLabels := make(map[string]string, 3)
+		nodeTaints := []corev1.Taint{}
+
+		if pool.Name == types.MachinePoolEdgeRoleName {
+			if subnet.PreferredInstanceType != "" {
+				instanceType = subnet.PreferredInstanceType
+			}
+			nodeLabels = map[string]string{
+				"node-role.kubernetes.io/edge": "",
+				"zone_type":                    subnet.ZoneType,
+				"zone_group":                   subnet.ZoneGroup,
+			}
+			nodeTaints = append(nodeTaints, corev1.Taint{
+				Key:    "node-role.kubernetes.io/edge",
+				Effect: "NoSchedule",
+			})
+		}
+
 		machineProviderInput := machineProviderInput{
 			clusterID:      clusterID,
 			region:         region,
-			subnet:         subnet,
-			instanceType:   mpool.InstanceType,
+			subnet:         subnet.ID,
+			instanceType:   instanceType,
 			osImage:        mpool.AMIID,
 			zone:           az,
-			role:           role,
+			role:           "worker",
 			userDataSecret: userDataSecret,
 			root:           &mpool.EC2RootVolume,
 			imds:           mpool.EC2Metadata,
@@ -66,20 +83,12 @@ func MachineSets(clusterID string, region string, subnets map[string]string, poo
 			ProviderSpec: machineapi.ProviderSpec{
 				Value: &runtime.RawExtension{Object: provider},
 			},
+			ObjectMeta: machineapi.ObjectMeta{
+				Labels: nodeLabels,
+			},
+			Taints: nodeTaints,
 		}
-		if pool.Name == types.MachinePoolEdgeRoleName {
-			spec.ObjectMeta = machineapi.ObjectMeta{
-				Labels: map[string]string{
-					"node-role.kubernetes.io/edge": "",
-				},
-			}
-			spec.Taints = []corev1.Taint{
-				{
-					Key:    "node-role.kubernetes.io/edge",
-					Effect: "NoSchedule",
-				},
-			}
-		}
+
 		mset := &machineapi.MachineSet{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "machine.openshift.io/v1beta1",

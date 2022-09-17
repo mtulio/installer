@@ -75,6 +75,7 @@ func validInstallConfig() *types.InstallConfig {
 			},
 		},
 		Compute: []types.MachinePool{{
+			Name:         types.MachinePoolComputeRoleName,
 			Architecture: types.ArchitectureAMD64,
 			Replicas:     pointer.Int64Ptr(3),
 			Platform: types.MachinePoolPlatform{
@@ -89,23 +90,54 @@ func validInstallConfig() *types.InstallConfig {
 	}
 }
 
+func validInstallConfigEdge() *types.InstallConfig {
+	ic := validInstallConfig()
+	edgeSubnets := validEdgeSubnets()
+	subnets := make([]string, 0, len(edgeSubnets))
+	for k := range edgeSubnets {
+		subnets = append(subnets, k)
+	}
+	ic.Platform.AWS.Subnets = append(ic.Platform.AWS.Subnets, subnets...)
+	ic.Compute = append(ic.Compute, types.MachinePool{
+		Name: types.MachinePoolEdgeRoleName,
+		Platform: types.MachinePoolPlatform{
+			AWS: &aws.MachinePool{},
+		},
+	})
+	return ic
+}
+
 func validAvailZones() []string {
 	return []string{"a", "b", "c"}
+}
+
+func validAvailZonesWithEdge() []string {
+	return []string{"a", "b", "c", "edge-a", "edge-b", "edge-c"}
+}
+
+func validAvailZonesOnlyEdge() []string {
+	return []string{"edge-a", "edge-b", "edge-c"}
 }
 
 func validPrivateSubnets() map[string]Subnet {
 	return map[string]Subnet{
 		"valid-private-subnet-a": {
-			Zone: "a",
-			CIDR: "10.0.1.0/24",
+			Zone:     "a",
+			CIDR:     "10.0.1.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   false,
 		},
 		"valid-private-subnet-b": {
-			Zone: "b",
-			CIDR: "10.0.2.0/24",
+			Zone:     "b",
+			CIDR:     "10.0.2.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   false,
 		},
 		"valid-private-subnet-c": {
-			Zone: "c",
-			CIDR: "10.0.3.0/24",
+			Zone:     "c",
+			CIDR:     "10.0.3.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   false,
 		},
 	}
 }
@@ -113,16 +145,45 @@ func validPrivateSubnets() map[string]Subnet {
 func validPublicSubnets() map[string]Subnet {
 	return map[string]Subnet{
 		"valid-public-subnet-a": {
-			Zone: "a",
-			CIDR: "10.0.4.0/24",
+			Zone:     "a",
+			CIDR:     "10.0.4.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   true,
 		},
 		"valid-public-subnet-b": {
-			Zone: "b",
-			CIDR: "10.0.5.0/24",
+			Zone:     "b",
+			CIDR:     "10.0.5.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   true,
 		},
 		"valid-public-subnet-c": {
-			Zone: "c",
-			CIDR: "10.0.6.0/24",
+			Zone:     "c",
+			CIDR:     "10.0.6.0/24",
+			ZoneType: aws.AvailabilityZoneTypeDefault,
+			Public:   true,
+		},
+	}
+}
+
+func validEdgeSubnets() map[string]Subnet {
+	return map[string]Subnet{
+		"valid-public-subnet-edge-a": {
+			Zone:     "edge-a",
+			CIDR:     "10.0.7.0/24",
+			ZoneType: aws.AvailabilityZoneTypeLocal,
+			Public:   true,
+		},
+		"valid-public-subnet-edge-b": {
+			Zone:     "edge-b",
+			CIDR:     "10.0.8.0/24",
+			ZoneType: aws.AvailabilityZoneTypeLocal,
+			Public:   true,
+		},
+		"valid-public-subnet-edge-c": {
+			Zone:     "edge-c",
+			CIDR:     "10.0.9.0/24",
+			ZoneType: aws.AvailabilityZoneTypeLocal,
+			Public:   true,
 		},
 	}
 }
@@ -211,6 +272,7 @@ func TestValidate(t *testing.T) {
 		availZones     []string
 		privateSubnets map[string]Subnet
 		publicSubnets  map[string]Subnet
+		edgeSubnets    map[string]Subnet
 		instanceTypes  map[string]InstanceType
 		proxy          string
 		expectErr      string
@@ -244,6 +306,13 @@ func TestValidate(t *testing.T) {
 		availZones:     validAvailZones(),
 		privateSubnets: validPrivateSubnets(),
 		publicSubnets:  validPublicSubnets(),
+	}, {
+		name:           "valid byo",
+		installConfig:  validInstallConfigEdge(),
+		availZones:     validAvailZones(),
+		privateSubnets: validPrivateSubnets(),
+		publicSubnets:  validPublicSubnets(),
+		edgeSubnets:    validEdgeSubnets(),
 	}, {
 		name: "valid byo",
 		installConfig: func() *types.InstallConfig {
@@ -298,6 +367,19 @@ func TestValidate(t *testing.T) {
 		availZones:    validAvailZones(),
 		instanceTypes: validInstanceTypes(),
 		expectErr:     `^\Q[compute[0].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 2 vCPUs, compute[0].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 8192 MiB Memory]\E$`,
+	}, {
+		name: "invalid edge instance type",
+		installConfig: func() *types.InstallConfig {
+			c := validInstallConfigEdge()
+			c.Platform.AWS = &aws.Platform{Region: "us-east-1"}
+			c.ControlPlane.Platform.AWS.InstanceType = "m5.xlarge"
+			c.Compute[0].Platform.AWS.InstanceType = "m5.xlarge"
+			c.Compute[1].Platform.AWS.InstanceType = "t2.small"
+			return c
+		}(),
+		availZones:    validAvailZones(),
+		instanceTypes: validInstanceTypes(),
+		expectErr:     `^\Q[compute[1].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 2 vCPUs, compute[1].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 8192 MiB Memory]\E$`,
 	}, {
 		name: "undefined compute instance type",
 		installConfig: func() *types.InstallConfig {
@@ -432,6 +514,26 @@ func TestValidate(t *testing.T) {
 		}(),
 		expectErr: `^platform\.aws\.subnets\[6\]: Invalid value: \"valid-public-zone-c-2\": public subnet valid-public-subnet-c is also in zone c$`,
 	}, {
+		name: "invalid multiple public edge in same zone",
+		installConfig: func() *types.InstallConfig {
+			c := validInstallConfigEdge()
+			c.Platform.AWS.Subnets = append(c.Platform.AWS.Subnets, "valid-public-zone-edge-c-2")
+			return c
+		}(),
+		availZones:     validAvailZonesWithEdge(),
+		privateSubnets: validPrivateSubnets(),
+		publicSubnets:  validPublicSubnets(),
+		edgeSubnets: func() map[string]Subnet {
+			s := validEdgeSubnets()
+			s["valid-public-zone-edge-c-2"] = Subnet{
+				Zone:     "edge-c",
+				CIDR:     "10.0.9.0/24",
+				ZoneType: aws.AvailabilityZoneTypeLocal,
+			}
+			return s
+		}(),
+		expectErr: `^platform\.aws\.subnets\[9\]: Invalid value: \"valid-public-zone-edge-c-2\": edge subnet valid-public-subnet-edge-c is also in zone edge-c$`,
+	}, {
 		name: "invalid no subnet for control plane zones",
 		installConfig: func() *types.InstallConfig {
 			c := validInstallConfig()
@@ -454,10 +556,21 @@ func TestValidate(t *testing.T) {
 		publicSubnets:  validPublicSubnets(),
 		expectErr:      `^controlPlane\.platform\.aws\.zones: Invalid value: \[\]string{\"a\", \"b\", \"c\", \"d\", \"e\"}: No subnets provided for zones \[d e\]$`,
 	}, {
+		name: "invalid no subnet for control plane zones",
+		installConfig: func() *types.InstallConfig {
+			c := validInstallConfigEdge()
+			c.ControlPlane.Platform.AWS.Zones = append(c.ControlPlane.Platform.AWS.Zones, "edge-a")
+			return c
+		}(),
+		availZones:     validAvailZonesWithEdge(),
+		privateSubnets: validPrivateSubnets(),
+		publicSubnets:  validPublicSubnets(),
+		expectErr:      `^controlPlane\.platform\.aws\.zones: Invalid value: \[\]string{\"a\", \"b\", \"c\", \"edge-a\"}: No subnets provided for zones \[edge-a\]$`,
+	}, {
 		name: "invalid no subnet for compute[0] zones",
 		installConfig: func() *types.InstallConfig {
 			c := validInstallConfig()
-			c.Compute[0].Platform.AWS.Zones = append(c.ControlPlane.Platform.AWS.Zones, "d")
+			c.Compute[0].Platform.AWS.Zones = append(c.Compute[0].Platform.AWS.Zones, "d")
 			return c
 		}(),
 		availZones:     validAvailZones(),
@@ -637,6 +750,7 @@ func TestValidate(t *testing.T) {
 				availabilityZones: test.availZones,
 				privateSubnets:    test.privateSubnets,
 				publicSubnets:     test.publicSubnets,
+				edgeSubnets:       test.edgeSubnets,
 				instanceTypes:     test.instanceTypes,
 			}
 			if test.proxy != "" {
