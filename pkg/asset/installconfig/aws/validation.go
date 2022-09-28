@@ -54,29 +54,28 @@ func Validate(ctx context.Context, meta *Metadata, config *types.InstallConfig) 
 
 	for idx, compute := range config.Compute {
 		fldPath := field.NewPath("compute").Index(idx)
+
 		if compute.Platform.AWS != nil {
+			switch compute.Name {
+			// Pool's specific validation
+			// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
+			case types.MachinePoolEdgeRoleName:
+				if len(config.Platform.AWS.Subnets) <= 0 {
+					// TODO create a test for this error
+					return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC.").Error())
+				}
+				edgeSubnets, err := meta.EdgeSubnets(ctx)
+				if err != nil {
+					allErrs = append(allErrs, field.Invalid(fldPath, edgeSubnets, err.Error()))
+				}
+				if len(edgeSubnets) <= 0 {
+					// TODO create a test for this error
+					return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool.").Error())
+				}
+				break
+			}
 			allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("platform", "aws"), config.Platform.AWS, compute.Platform.AWS, computeReq, compute.Name)...)
 		}
-
-		// Pool's specific validation
-		// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
-		if compute.Name == types.MachinePoolEdgeRoleName {
-			if len(config.Platform.AWS.Subnets) <= 0 {
-				// TODO create a test for this error
-				errMsg := "invalid install config. Edge Machine Pool is supported when installing in existing VPC."
-				allErrs = append(allErrs, field.Invalid(fldPath, fmt.Sprintln("config.Platform.AWS.Subnets"), errMsg))
-			}
-			edgeSubnets, err := meta.EdgeSubnets(ctx)
-			if err != nil {
-				allErrs = append(allErrs, field.Invalid(fldPath, edgeSubnets, err.Error()))
-			}
-			if len(edgeSubnets) <= 0 {
-				// TODO create a test for this error
-				errMsg := "invalid install config. There is no subnets supported for the Edge Machine Pool."
-				allErrs = append(allErrs, field.Invalid(fldPath, edgeSubnets, errMsg))
-			}
-		}
-
 	}
 	return allErrs.ToAggregate()
 }

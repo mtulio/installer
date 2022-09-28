@@ -93,11 +93,9 @@ func validInstallConfig() *types.InstallConfig {
 func validInstallConfigEdge() *types.InstallConfig {
 	ic := validInstallConfig()
 	edgeSubnets := validEdgeSubnets()
-	subnets := make([]string, 0, len(edgeSubnets))
-	for k := range edgeSubnets {
-		subnets = append(subnets, k)
+	for subnet := range edgeSubnets {
+		ic.Platform.AWS.Subnets = append(ic.Platform.AWS.Subnets, subnet)
 	}
-	ic.Platform.AWS.Subnets = append(ic.Platform.AWS.Subnets, subnets...)
 	ic.Compute = append(ic.Compute, types.MachinePool{
 		Name: types.MachinePoolEdgeRoleName,
 		Platform: types.MachinePoolPlatform{
@@ -368,19 +366,6 @@ func TestValidate(t *testing.T) {
 		instanceTypes: validInstanceTypes(),
 		expectErr:     `^\Q[compute[0].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 2 vCPUs, compute[0].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 8192 MiB Memory]\E$`,
 	}, {
-		name: "invalid edge instance type",
-		installConfig: func() *types.InstallConfig {
-			c := validInstallConfigEdge()
-			c.Platform.AWS = &aws.Platform{Region: "us-east-1"}
-			c.ControlPlane.Platform.AWS.InstanceType = "m5.xlarge"
-			c.Compute[0].Platform.AWS.InstanceType = "m5.xlarge"
-			c.Compute[1].Platform.AWS.InstanceType = "t2.small"
-			return c
-		}(),
-		availZones:    validAvailZones(),
-		instanceTypes: validInstanceTypes(),
-		expectErr:     `^\Q[compute[1].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 2 vCPUs, compute[1].platform.aws.type: Invalid value: "t2.small": instance type does not meet minimum resource requirements of 8192 MiB Memory]\E$`,
-	}, {
 		name: "undefined compute instance type",
 		installConfig: func() *types.InstallConfig {
 			c := validInstallConfig()
@@ -556,21 +541,10 @@ func TestValidate(t *testing.T) {
 		publicSubnets:  validPublicSubnets(),
 		expectErr:      `^controlPlane\.platform\.aws\.zones: Invalid value: \[\]string{\"a\", \"b\", \"c\", \"d\", \"e\"}: No subnets provided for zones \[d e\]$`,
 	}, {
-		name: "invalid no subnet for control plane zones",
-		installConfig: func() *types.InstallConfig {
-			c := validInstallConfigEdge()
-			c.ControlPlane.Platform.AWS.Zones = append(c.ControlPlane.Platform.AWS.Zones, "edge-a")
-			return c
-		}(),
-		availZones:     validAvailZonesWithEdge(),
-		privateSubnets: validPrivateSubnets(),
-		publicSubnets:  validPublicSubnets(),
-		expectErr:      `^controlPlane\.platform\.aws\.zones: Invalid value: \[\]string{\"a\", \"b\", \"c\", \"edge-a\"}: No subnets provided for zones \[edge-a\]$`,
-	}, {
 		name: "invalid no subnet for compute[0] zones",
 		installConfig: func() *types.InstallConfig {
 			c := validInstallConfig()
-			c.Compute[0].Platform.AWS.Zones = append(c.Compute[0].Platform.AWS.Zones, "d")
+			c.Compute[0].Platform.AWS.Zones = append(c.ControlPlane.Platform.AWS.Zones, "d")
 			return c
 		}(),
 		availZones:     validAvailZones(),

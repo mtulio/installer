@@ -65,7 +65,11 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 	metas := make(map[string]Subnet, len(ids))
 	zoneNames := make([]*string, len(ids))
 	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
-	subnets = SubnetsGroups{}
+	subnets = SubnetsGroups{
+		Public:  make(map[string]Subnet, len(ids)),
+		Private: make(map[string]Subnet, len(ids)),
+		Edge:    make(map[string]Subnet, len(ids)),
+	}
 
 	var vpcFromSubnet string
 	client := ec2.New(session, aws.NewConfig().WithRegion(region))
@@ -97,19 +101,22 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 					return false
 				}
 
-				if vpc == "" {
-					vpc = *subnet.VpcId
+				if subnets.VPC == "" {
+					subnets.VPC = *subnet.VpcId
 					vpcFromSubnet = *subnet.SubnetId
-				} else if *subnet.VpcId != vpc {
-					lastError = errors.Errorf("all subnets must belong to the same VPC: %s is from %s, but %s is from %s", *subnet.SubnetId, *subnet.VpcId, vpcFromSubnet, vpc)
+				} else if *subnet.VpcId != subnets.VPC {
+					lastError = errors.Errorf("all subnets must belong to the same VPC: %s is from %s, but %s is from %s", *subnet.SubnetId, *subnet.VpcId, vpcFromSubnet, subnets.VPC)
 					return false
 				}
 
 				metas[*subnet.SubnetId] = Subnet{
-					ARN:  *subnet.SubnetArn,
-					Zone: *subnet.AvailabilityZone,
-					CIDR: *subnet.CidrBlock,
+					ID:     *subnet.SubnetId,
+					ARN:    *subnet.SubnetArn,
+					Zone:   *subnet.AvailabilityZone,
+					CIDR:   *subnet.CidrBlock,
+					Public: false,
 				}
+				zoneNames = append(zoneNames, subnet.AvailabilityZone)
 			}
 			return !lastPage
 		},
@@ -173,30 +180,21 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 			if !meta.Public {
 				return subnets, errors.Errorf("Local Zones subnets must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
 			}
-			if subnets.Edge == nil {
-				subnets.Edge = make(map[string]Subnet, len(ids))
-			}
 			subnets.Edge[id] = meta
 			continue
 		}
 		if meta.Public {
-			if subnets.Public == nil {
-				subnets.Public = make(map[string]Subnet, len(ids))
-			}
 			subnets.Public[id] = meta
-			continue
-		}
 
-		// Let public subnets work as if they were private. This allows us to
-		// have clusters with public-only subnets without having to introduce a
-		// lot of changes in the installer. Such clusters can be used in a
-		// NAT-less GW scenario, therefore decreasing costs in cases where node
-		// security is not a concern (e.g, ephemeral clusters in CI)
-		if publicOnlySubnets && isPublic {
-			private[id] = meta
-		}
-		if subnets.Private == nil {
-			subnets.Private = make(map[string]Subnet, len(ids))
+			// Let public subnets work as if they were private. This allows us to
+			// have clusters with public-only subnets without having to introduce a
+			// lot of changes in the installer. Such clusters can be used in a
+			// NAT-less GW scenario, therefore decreasing costs in cases where node
+			// security is not a concern (e.g, ephemeral clusters in CI)
+			if publicOnlySubnets {
+				subnets.Private[id] = meta
+			}
+			continue
 		}
 		subnets.Private[id] = meta
 	}
