@@ -77,7 +77,7 @@ func (m *Metadata) AvailabilityZones(ctx context.Context) ([]string, error) {
 
 // EdgeSubnets retrieves subnet metadata indexed by subnet ID, for
 // subnets that the cloud-provider logic considers to be edge
-// (i.e. Wavelength or Local Zone).
+// (i.e. Local Zone).
 func (m *Metadata) EdgeSubnets(ctx context.Context) (map[string]Subnet, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

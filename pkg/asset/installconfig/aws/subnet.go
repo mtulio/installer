@@ -29,25 +29,21 @@ type Subnet struct {
 	CIDR string
 
 	// ZoneType is the type of subnet's availability zone.
-	// The valid values are availability-zone, local-zone, and
-	// wavelength-zone.
+	// The valid values are availability-zone and local-zone.
 	ZoneType string
 
 	// ZoneGroup is the group of subnet's availability zone is part of.
 	// For Availability Zones, this parameter has the same value as the Region name.
 	//
 	// For Local Zones, the name of the associated group, for example us-west-2-lax-1.
-	//
-	// For Wavelength Zones, the name of the associated group, for example us-east-1-wl1-bos-wlz-1.
 	ZoneGroup string
 
 	// Public is the flag to define the subnet public.
 	Public bool
 
-	// PreferredInstanceType is the preferred instance type on the subnet's zone.
-	// It's used for edge pools which usually does not have the same availability
-	// across zone groups.
-	PreferredInstanceType string
+	// PreferredEdgeInstanceType is the preferred instance type on the subnet's zone.
+	// It's used for the edge pools which does not offer the same type across zone groups.
+	PreferredEdgeInstanceType string
 }
 
 // Subnets is the map for the Subnet metadata.
@@ -148,12 +144,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		return subnetGroups, errors.Wrap(err, "describing route tables")
 	}
 
-	azs, err := client.DescribeAvailabilityZonesWithContext(
-		ctx,
-		&ec2.DescribeAvailabilityZonesInput{
-			ZoneNames: zoneNames,
-		},
-	)
+	azs, err := client.DescribeAvailabilityZonesWithContext(ctx, &ec2.DescribeAvailabilityZonesInput{ZoneNames: zoneNames})
 	if err != nil {
 		return subnetGroups, errors.Wrap(err, "describing availability zones")
 	}

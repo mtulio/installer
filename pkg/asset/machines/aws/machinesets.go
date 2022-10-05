@@ -46,8 +46,8 @@ func MachineSets(clusterID string, region string, subnets *icaws.Subnets, pool *
 		nodeTaints := []corev1.Taint{}
 
 		if pool.Name == types.MachinePoolEdgeRoleName {
-			if subnet.PreferredInstanceType != "" {
-				instanceType = subnet.PreferredInstanceType
+			if subnet.PreferredEdgeInstanceType != "" {
+				instanceType = subnet.PreferredEdgeInstanceType
 			}
 			nodeLabels = map[string]string{
 				"node-role.kubernetes.io/edge": "",

@@ -202,9 +202,9 @@ func awsDefaultMachineTypes(region string, arch types.Architecture) []string {
 	return types
 }
 
-// awsDiscoveryPreferredInstanceEdgePool discovery supported instanceType for each subnet's
-// Availability Zone from the preferred list of instances allowed for OCP.
-func awsDiscoveryPreferredInstanceEdgePool(ctx context.Context, defaultTypes []string, meta *icaws.Metadata, subnets *icaws.Subnets) (err error) {
+// awsDiscoveryPreferredEdgeInstanceByZone discover supported instanceType for each subnet's
+// zone using the preferred list of instances allowed for OCP.
+func awsDiscoveryPreferredEdgeInstanceByZone(ctx context.Context, defaultTypes []string, meta *icaws.Metadata, subnets *icaws.Subnets) (err error) {
 	for zone := range *subnets {
 		subnet, ok := (*subnets)[zone]
 		if !ok {
@@ -219,7 +219,7 @@ func awsDiscoveryPreferredInstanceEdgePool(ctx context.Context, defaultTypes []s
 			logrus.Warn(errors.Wrap(err, errMsg))
 			continue
 		}
-		subnet.PreferredInstanceType = preferredType
+		subnet.PreferredEdgeInstanceType = preferredType
 		(*subnets)[zone] = subnet
 	}
 	return nil
@@ -389,7 +389,7 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 
 				switch pool.Name {
 				case types.MachinePoolEdgeRoleName:
-					err = awsDiscoveryPreferredInstanceEdgePool(ctx, instanceTypes, installConfig.AWS, &subnets)
+					err = awsDiscoveryPreferredEdgeInstanceByZone(ctx, instanceTypes, installConfig.AWS, &subnets)
 					if err != nil {
 						logrus.Warn(errors.Wrap(err, "failed to find default instance type for edge pool"))
 						mpool.InstanceType = instanceTypes[0]
@@ -403,7 +403,6 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 					}
 				}
 			}
-
 			// if the list of zones is the default we need to try to filter the list in case there are some zones where the instance might not be available
 			if zoneDefaults {
 				mpool.Zones, err = aws.FilterZonesBasedOnInstanceType(ctx, installConfig.AWS, mpool.InstanceType, mpool.Zones)
@@ -411,6 +410,7 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 					logrus.Warn(errors.Wrap(err, "failed to filter zone list"))
 				}
 			}
+
 			pool.Platform.AWS = &mpool
 			sets, err := aws.MachineSets(
 				clusterID.InfraID,
