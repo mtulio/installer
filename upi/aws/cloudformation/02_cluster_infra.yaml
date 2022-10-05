@@ -13,8 +13,9 @@ Parameters:
     AllowedPattern: ^([a-zA-Z][a-zA-Z0-9\-]{0,26})$
     MaxLength: 27
     MinLength: 1
-    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27 characters.
-    Description: A short, unique cluster ID used to tag cloud resources and identify items owned or used by the cluster.
+    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27
+      characters.
+    Description: A short, unique cluster ID used to tag cloud resources and identify items owned or used by thecluster.
     Type: String
   HostedZoneId:
     Description: The Route53 public zone ID to register the targets with, such as Z21IXYZABCZ2A4.
@@ -289,11 +290,18 @@ Resources:
           def handler(event, context):
             elb = boto3.client('elbv2')
             if event['RequestType'] == 'Delete':
-              elb.deregister_targets(TargetGroupArn=event['ResourceProperties']['TargetArn'],Targets=[{'Id': event['ResourceProperties']['TargetIp']}])
+              elb.deregister_targets(\
+                  TargetGroupArn=event['ResourceProperties']['TargetArn'],
+                  Targets=[{'Id': event['ResourceProperties']['TargetIp']}]
+                )
             elif event['RequestType'] == 'Create':
-              elb.register_targets(TargetGroupArn=event['ResourceProperties']['TargetArn'],Targets=[{'Id': event['ResourceProperties']['TargetIp']}])
+              elb.register_targets(\
+                TargetGroupArn=event['ResourceProperties']['TargetArn'],
+                Targets=[{'Id': event['ResourceProperties']['TargetIp']}]
+              )
             responseData = {}
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, event['ResourceProperties']['TargetArn']+event['ResourceProperties']['TargetIp'])
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData,
+                             event['ResourceProperties']['TargetArn']+event['ResourceProperties']['TargetIp'])
       Runtime: "python3.8"
       Timeout: 120
 
@@ -348,12 +356,19 @@ Resources:
             ec2_client = boto3.client('ec2')
             if event['RequestType'] == 'Delete':
               for subnet_id in event['ResourceProperties']['Subnets']:
-                ec2_client.delete_tags(Resources=[subnet_id], Tags=[{'Key': 'kubernetes.io/cluster/' + event['ResourceProperties']['InfrastructureName']}]);
+                ec2_client.delete_tags(
+                  Resources=[subnet_id],
+                  Tags=[{'Key': 'kubernetes.io/cluster/' + event['ResourceProperties']['InfrastructureName']}]
+                );
             elif event['RequestType'] == 'Create':
               for subnet_id in event['ResourceProperties']['Subnets']:
-                ec2_client.create_tags(Resources=[subnet_id], Tags=[{'Key': 'kubernetes.io/cluster/' + event['ResourceProperties']['InfrastructureName'], 'Value': 'shared'}]);
+                ec2_client.create_tags(
+                  Resources=[subnet_id],
+                  Tags=[{'Key': 'kubernetes.io/cluster/' + event['ResourceProperties']['InfrastructureName'],
+                        'Value': 'shared'}]);
             responseData = {}
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, event['ResourceProperties']['InfrastructureName']+event['ResourceProperties']['Subnets'][0])
+            resourceProps = event['ResourceProperties']['InfrastructureName']+event['ResourceProperties']['Subnets'][0]
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, resourceProps)
       Runtime: "python3.8"
       Timeout: 120
 

@@ -6,7 +6,8 @@ Parameters:
     AllowedPattern: ^([a-zA-Z][a-zA-Z0-9\-]{0,26})$
     MaxLength: 27
     MinLength: 1
-    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27 characters.
+    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27
+      characters.
     Description: A short, unique cluster ID used to tag nodes for the kubelet cloud provider.
     Type: String
   RhcosAmi:
@@ -59,16 +60,20 @@ Parameters:
     Description: Do you want to invoke NLB registration, which requires a Lambda ARN parameter?
     Type: String
   RegisterNlbIpTargetsLambdaArn:
-    Description: ARN for NLB IP target registration lambda. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Description: ARN for NLB IP target registration lambda. Supply the value from the cluster infrastructure or select
+      "no" for AutoRegisterELB.
     Type: String
   ExternalApiTargetGroupArn:
-    Description: ARN for external API load balancer target group. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Description: ARN for external API load balancer target group. Supply the value from the cluster infrastructure or
+      select "no" for AutoRegisterELB.
     Type: String
   InternalApiTargetGroupArn:
-    Description: ARN for internal API load balancer target group. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Description: ARN for internal API load balancer target group. Supply the value from the cluster infrastructure or
+      select "no" for AutoRegisterELB.
     Type: String
   InternalServiceTargetGroupArn:
-    Description: ARN for internal service load balancer target group. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Description: ARN for internal service load balancer target group. Supply the value from the cluster infrastructure
+      or select "no" for AutoRegisterELB.
     Type: String
 
 Metadata:

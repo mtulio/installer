@@ -6,7 +6,8 @@ Parameters:
     AllowedPattern: ^([a-zA-Z][a-zA-Z0-9\-]{0,26})$
     MaxLength: 27
     MinLength: 1
-    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27 characters.
+    ConstraintDescription: Infrastructure name must be alphanumeric, start with a letter, and have a maximum of 27
+      characters.
     Description: A short, unique cluster ID used to tag nodes for the kubelet cloud provider.
     Type: String
   RhcosAmi:
