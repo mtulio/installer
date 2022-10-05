@@ -247,7 +247,7 @@ func TestDefaultAWSMachinePoolPlatform(t *testing.T) {
 			poolName: types.MachinePoolComputeRoleName,
 			expectedMachinePool: awstypes.MachinePool{
 				EC2RootVolume: awstypes.EC2RootVolume{
-					Type: awstypes.Ec2EbsGp3VolumeType,
+					Type: awstypes.VolumeTypeGp3,
 					Size: decimalRootVolumeSize,
 				},
 			},
@@ -265,7 +265,7 @@ func TestDefaultAWSMachinePoolPlatform(t *testing.T) {
 			poolName: types.MachinePoolEdgeRoleName,
 			expectedMachinePool: awstypes.MachinePool{
 				EC2RootVolume: awstypes.EC2RootVolume{
-					Type: awstypes.Ec2EbsGp2VolumeType,
+					Type: awstypes.VolumeTypeGp2,
 					Size: decimalRootVolumeSize,
 				},
 			},

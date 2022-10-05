@@ -14,15 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type SubnetsGroups struct {
-	Public  map[string]Subnet
-	Private map[string]Subnet
-	Edge    map[string]Subnet
-	VPC     string
-}
-
-type Subnets map[string]Subnet
-
 // Subnet holds metadata for a subnet.
 type Subnet struct {
 	// ID is the subnet's Identifier.
@@ -59,13 +50,24 @@ type Subnet struct {
 	PreferredInstanceType string
 }
 
+// Subnets is the map for the Subnet metadata.
+type Subnets map[string]Subnet
+
+// SubnetGroups is the group of subnets used by installer.
+type SubnetGroups struct {
+	Public  Subnets
+	Private Subnets
+	Edge    Subnets
+	VPC     string
+}
+
 // subnets retrieves metadata for the given subnet(s).
-func subnets(ctx context.Context, session *session.Session, region string, ids []string) (subnets SubnetsGroups, err error) {
+func subnets(ctx context.Context, session *session.Session, region string, ids []string) (subnetGroups SubnetGroups, err error) {
 
 	metas := make(map[string]Subnet, len(ids))
 	zoneNames := make([]*string, len(ids))
 	availabilityZones := make(map[string]*ec2.AvailabilityZone, len(ids))
-	subnets = SubnetsGroups{
+	subnetGroups = SubnetGroups{
 		Public:  make(map[string]Subnet, len(ids)),
 		Private: make(map[string]Subnet, len(ids)),
 		Edge:    make(map[string]Subnet, len(ids)),
@@ -101,11 +103,11 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 					return false
 				}
 
-				if subnets.VPC == "" {
-					subnets.VPC = *subnet.VpcId
+				if subnetGroups.VPC == "" {
+					subnetGroups.VPC = *subnet.VpcId
 					vpcFromSubnet = *subnet.SubnetId
-				} else if *subnet.VpcId != subnets.VPC {
-					lastError = errors.Errorf("all subnets must belong to the same VPC: %s is from %s, but %s is from %s", *subnet.SubnetId, *subnet.VpcId, vpcFromSubnet, subnets.VPC)
+				} else if *subnet.VpcId != subnetGroups.VPC {
+					lastError = errors.Errorf("all subnets must belong to the same VPC: %s is from %s, but %s is from %s", *subnet.SubnetId, *subnet.VpcId, vpcFromSubnet, subnetGroups.VPC)
 					return false
 				}
 
@@ -125,7 +127,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		err = lastError
 	}
 	if err != nil {
-		return subnets, errors.Wrap(err, "describing subnets")
+		return subnetGroups, errors.Wrap(err, "describing subnets")
 	}
 
 	var routeTables []*ec2.RouteTable
@@ -134,7 +136,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		&ec2.DescribeRouteTablesInput{
 			Filters: []*ec2.Filter{{
 				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(subnets.VPC)},
+				Values: []*string{aws.String(subnetGroups.VPC)},
 			}},
 		},
 		func(results *ec2.DescribeRouteTablesOutput, lastPage bool) bool {
@@ -143,7 +145,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		},
 	)
 	if err != nil {
-		return subnets, errors.Wrap(err, "describing route tables")
+		return subnetGroups, errors.Wrap(err, "describing route tables")
 	}
 
 	azs, err := client.DescribeAvailabilityZonesWithContext(
@@ -153,7 +155,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		},
 	)
 	if err != nil {
-		return subnets, errors.Wrap(err, "describing availability zones")
+		return subnetGroups, errors.Wrap(err, "describing availability zones")
 	}
 	for _, az := range azs.AvailabilityZones {
 		availabilityZones[*az.ZoneName] = az
@@ -164,27 +166,27 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 	for _, id := range ids {
 		meta, ok := metas[id]
 		if !ok {
-			return subnets, errors.Errorf("failed to find %s", id)
+			return subnetGroups, errors.Errorf("failed to find %s", id)
 		}
 
 		isPublic, err := isSubnetPublic(routeTables, id)
 		if err != nil {
-			return subnets, err
+			return subnetGroups, err
 		}
 		meta.Public = isPublic
 		meta.ZoneType = *availabilityZones[meta.Zone].ZoneType
 		meta.ZoneGroup = *availabilityZones[meta.Zone].GroupName
 
-		if meta.ZoneType == awstypes.AvailabilityZoneTypeLocal {
+		if meta.ZoneType == awstypes.LocalZoneType {
 			// Local Zones is supported only in Public subnets
 			if !meta.Public {
-				return subnets, errors.Errorf("Local Zones subnets must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
+				return subnetGroups, errors.Errorf("Local Zones subnets must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
 			}
-			subnets.Edge[id] = meta
+			subnetGroups.Edge[id] = meta
 			continue
 		}
 		if meta.Public {
-			subnets.Public[id] = meta
+			subnetGroups.Public[id] = meta
 
 			// Let public subnets work as if they were private. This allows us to
 			// have clusters with public-only subnets without having to introduce a
@@ -192,13 +194,13 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 			// NAT-less GW scenario, therefore decreasing costs in cases where node
 			// security is not a concern (e.g, ephemeral clusters in CI)
 			if publicOnlySubnets {
-				subnets.Private[id] = meta
+				subnetGroups.Private[id] = meta
 			}
 			continue
 		}
-		subnets.Private[id] = meta
+		subnetGroups.Private[id] = meta
 	}
-	return subnets, nil
+	return subnetGroups, nil
 }
 
 // https://github.com/kubernetes/kubernetes/blob/9f036cd43d35a9c41d7ac4ca82398a6d0bef957b/staging/src/k8s.io/legacy-cloud-providers/aws/aws.go#L3376-L3419

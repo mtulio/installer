@@ -3,9 +3,10 @@ package aws
 import "github.com/aws/aws-sdk-go/aws/endpoints"
 
 const (
-	// Ec2EbsVolumeGp2
-	Ec2EbsGp2VolumeType = "gp2"
-	Ec2EbsGp3VolumeType = "gp3"
+	// VolumeTypeGp2 is the type of EBS volume for General Purpose SSD gp2.
+	VolumeTypeGp2 = "gp2"
+	// VolumeTypeGp3 is the type of EBS volume for General Purpose SSD gp3.
+	VolumeTypeGp3 = "gp3"
 )
 
 // Platform stores all the global configuration that all machinesets

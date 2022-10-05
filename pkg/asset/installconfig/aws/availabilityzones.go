@@ -41,7 +41,7 @@ func availabilityZones(ctx context.Context, session *session.Session, region str
 	}
 	zones := []string{}
 	for _, zone := range azs {
-		if *zone.ZoneType == awstypes.AvailabilityZoneTypeDefault {
+		if *zone.ZoneType == awstypes.RegularZoneType {
 			zones = append(zones, *zone.ZoneName)
 		}
 	}

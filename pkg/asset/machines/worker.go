@@ -91,13 +91,13 @@ var (
 )
 
 func defaultAWSMachinePoolPlatform(poolName string) awstypes.MachinePool {
-	defaultEBSType := awstypes.Ec2EbsGp3VolumeType
+	defaultEBSType := awstypes.VolumeTypeGp3
 
 	// gp3 is not offered in all local-zones locations used by Edge Pools.
-	//  Once it is available it can be used as default for all machine pools.
+	// Once it is available, it can be used as default for all machine pools.
 	// https://aws.amazon.com/about-aws/global-infrastructure/localzones/features
 	if poolName == types.MachinePoolEdgeRoleName {
-		defaultEBSType = awstypes.Ec2EbsGp2VolumeType
+		defaultEBSType = awstypes.VolumeTypeGp2
 	}
 	return awstypes.MachinePool{
 		EC2RootVolume: awstypes.EC2RootVolume{
