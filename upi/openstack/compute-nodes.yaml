@@ -8,7 +8,7 @@
 - import_playbook: common.yaml
 
 - hosts: all
-  gather_facts: no
+  gather_facts: false
 
   tasks:
   - name: 'Create the Compute ports'
@@ -58,7 +58,9 @@
   - name: 'Create the Compute server group'
     command:
       # os-compute-api-version 2.15 or higher is required for the 'soft-anti-affinity' policy
-      cmd: "openstack --os-compute-api-version=2.15 server group create -f json -c id --policy=soft-anti-affinity {{ os_compute_server_group_name }}"
+      cmd: |
+        openstack --os-compute-api-version=2.15 server group create -f json -c id \
+          --policy=soft-anti-affinity {{ os_compute_server_group_name }}
     register: server_group_created
     when:
     - server_group_id is not defined
@@ -74,7 +76,7 @@
       name: "{{ item.1 }}-{{ item.0 }}"
       image: "{{ os_image_rhcos }}"
       flavor: "{{ os_flavor_worker }}"
-      auto_ip: no
+      auto_ip: false
       userdata: "{{ lookup('file', 'worker.ign') | string }}"
       nics:
       - port-name: "{{ os_port_worker }}-{{ item.0 }}"

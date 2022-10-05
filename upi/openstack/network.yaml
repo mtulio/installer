@@ -8,7 +8,7 @@
 - import_playbook: common.yaml
 
 - hosts: all
-  gather_facts: no
+  gather_facts: false
 
   tasks:
   - name: 'Create the primary cluster network'
@@ -53,14 +53,16 @@
 
   - name: 'Get first part of OpenStack network'
     set_fact:
-      allocation_pool: "{{ allocation_pool + '--allocation-pool start={{ first_ip_os_svc_network_range | ipmath(1) }},end={{ first_ip_svc_subnet_range |ipmath(-1) }}' }}"
+      allocation_pool: "{{ allocation_pool + '--allocation-pool start={{ first_ip_os_svc_network_range | ipmath(1) }},\
+                            end={{ first_ip_svc_subnet_range | ipmath(-1) }}' }}"
     when:
     - os_networking_type == "Kuryr"
     - first_ip_svc_subnet_range != first_ip_os_svc_network_range
 
   - name: 'Get last part of OpenStack network'
     set_fact:
-      allocation_pool: "{{ allocation_pool + ' --allocation-pool start={{ last_ip_svc_subnet_range | ipmath(1) }},end={{ last_ip_os_svc_network_range |ipmath(-1) }}' }}"
+      allocation_pool: "{{ allocation_pool + ' --allocation-pool start={{ last_ip_svc_subnet_range | ipmath(1) }},\
+                            end={{ last_ip_os_svc_network_range |ipmath(-1) }}' }}"
     when:
     - os_networking_type == "Kuryr"
     - last_ip_svc_subnet_range != last_ip_os_svc_network_range
@@ -83,7 +85,11 @@
 
   - name: 'Create the service subnet'
     command:
-      cmd: "openstack subnet create --ip-version 4 --gateway {{ gateway_ip }} --subnet-range {{ os_svc_network_range }} {{ allocation_pool }} --no-dhcp --network {{ os_svc_network }} --tag {{ cluster_id_tag }} {{ os_svc_subnet }}"
+      cmd: |
+        openstack subnet create --ip-version 4 --gateway {{ gateway_ip }} \
+          --subnet-range {{ os_svc_network_range }} {{ allocation_pool }} \
+          --no-dhcp --network {{ os_svc_network }} \
+          --tag {{ cluster_id_tag }} {{ os_svc_subnet }}
     when:
     - os_networking_type == "Kuryr"
     - svc_subnet.stdout == ""
@@ -96,7 +102,10 @@
 
   - name: 'Create pods subnet pool'
     command:
-      cmd: "openstack subnet pool create --default-prefix-length {{ host_prefix }} --pool-prefix {{ cluster_network_cidrs }} --tag {{ cluster_id_tag }} {{ subnet_pool }}"
+      cmd: |
+        openstack subnet pool create --default-prefix-length {{ host_prefix }} \
+          --pool-prefix {{ cluster_network_cidrs }} \
+          --tag {{ cluster_id_tag }} {{ subnet_pool }}
     when:
     - os_networking_type == "Kuryr"
     - pods_subnet_pool.stdout == ""

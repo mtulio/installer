@@ -7,7 +7,7 @@
 - import_playbook: common.yaml
 
 - hosts: all
-  gather_facts: no
+  gather_facts: false
 
   tasks:
   - name: 'Get an auth token'
@@ -21,12 +21,16 @@
       headers:
         X-Auth-Token: "{{ cloud.ansible_facts.auth_token }}"
         Content-Type: 'application/json'
-      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') | first | json_query('endpoints') | selectattr('interface', 'match', 'public') | first | json_query('url') }}/"
+      # yamllint disable-line rule:line-length
+      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') \
+                | first | json_query('endpoints') | selectattr('interface', 'match', 'public') \
+                | first | json_query('url') }}/"
     register: octavia_versions
     when: os_networking_type == "Kuryr"
 
   - set_fact:
-      versions: "{{ octavia_versions.json.versions | selectattr('id', 'match', 'v2.5') | map(attribute='id') | list }}"
+      versions: "{{ octavia_versions.json.versions | selectattr('id', 'match', 'v2.5') \
+                    | map(attribute='id') | list }}"
     when: os_networking_type == "Kuryr"
 
   - name: 'List tagged loadbalancers'
@@ -34,7 +38,9 @@
       method: GET
       headers:
         X-Auth-Token: "{{ cloud.ansible_facts.auth_token }}"
-      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') | first | json_query('endpoints') | selectattr('interface', 'match', 'public') | first | json_query('url') }}/v2.0/lbaas/loadbalancers?tags={{cluster_id_tag}}"
+      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') \
+                | first | json_query('endpoints') | selectattr('interface', 'match', 'public') \
+                | first | json_query('url') }}/v2.0/lbaas/loadbalancers?tags={{cluster_id_tag}}"
     when:
     - os_networking_type == "Kuryr"
     - versions | length > 0
@@ -57,7 +63,9 @@
       method: GET
       headers:
         X-Auth-Token: "{{ cloud.ansible_facts.auth_token }}"
-      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') | first | json_query('endpoints') | selectattr('interface', 'match', 'public') | first | json_query('url') }}/v2.0/lbaas/loadbalancers?description={{cluster_id_tag}}"
+      url: "{{ cloud.ansible_facts.service_catalog | selectattr('name', 'match', 'octavia') | first \
+                | json_query('endpoints') | selectattr('interface', 'match', 'public') | first \
+                | json_query('url') }}/v2.0/lbaas/loadbalancers?description={{cluster_id_tag}}"
     when:
     - os_networking_type == "Kuryr"
     - versions | length == 0

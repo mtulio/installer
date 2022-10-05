@@ -7,7 +7,7 @@
 - import_playbook: common.yaml
 
 - hosts: all
-  gather_facts: no
+  gather_facts: false
 
   tasks:
   - name: 'List ports attatched to router'
@@ -22,7 +22,9 @@
 
   - name: 'List ha ports attached to router'
     command:
-      cmd: "openstack port list --device-owner=network:ha_router_replicated_interface --tags {{ cluster_id_tag }} -f value -c id"
+      cmd: |
+        openstack port list --device-owner=network:ha_router_replicated_interface --tags {{ cluster_id_tag }} \
+          -f value -c id
     register: ha_router_ports
 
   - name: 'Remove the ha ports from router'
