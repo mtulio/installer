@@ -1,4 +1,3 @@
----
 all:
   vars:
     ovirt_cluster: "Default"
@@ -8,6 +7,7 @@ all:
       ovirt_config_path: "{{ lookup('env', 'HOME') }}/.ovirt/ovirt-config.yaml"
 
     rhcos:
+      # yamllint disable-line rule:line-length
       image_url: "https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/pre-release/latest-4.6/rhcos-4.6.0-0.nightly-2020-07-16-122837-x86_64-openstack.x86_64.qcow2.gz"
       local_cmp_image_path: "/tmp/rhcos.qcow2.gz"
       local_image_path: "/tmp/rhcos.qcow2"

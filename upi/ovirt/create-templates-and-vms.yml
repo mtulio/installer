@@ -1,4 +1,3 @@
----
 - hosts: localhost
   connection: local
   gather_facts: false
@@ -29,9 +28,9 @@
     block:
     - name: Check local image existance
       stat:
-        get_mime: no
-        get_checksum: no
-        get_attributes: no
+        get_mime: false
+        get_checksum: false
+        get_attributes: false
         path: "{{ rhcos.local_image_path }}"
       register: image_stats
       loop:
@@ -43,7 +42,7 @@
       get_url:
         url: "{{ rhcos.image_url }}"
         dest: "{{ rhcos.local_cmp_image_path}}"
-        force: no
+        force: false
 
     - name: Extract RHCOS image
       shell: "gunzip -c {{ rhcos.local_cmp_image_path }} > {{ rhcos.local_image_path }}"
@@ -62,7 +61,7 @@
         template_disk_size: "{{ item.disks.0.size }}"
         template_disk_interface: "{{ item.disks.0.interface }}"
         template_operating_system: "{{ item.operating_system }}"
-        template_seal: no
+        template_seal: false
       loop:
       - "{{ control_plane }}"
       - "{{ compute }}"

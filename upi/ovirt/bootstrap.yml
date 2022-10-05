@@ -1,4 +1,3 @@
----
 - hosts: localhost
   connection: local
   gather_facts: false
@@ -12,7 +11,7 @@
       cluster: "{{ item.profile.cluster }}"
       name: "{{ item.name }}"
       state: running
-      cloud_init_persist: True
+      cloud_init_persist: true
       cloud_init:
         custom_script: "{{ lookup('file', ocp.assets_dir+'/'+item.ocp_type+'.ign') | string }}"
     with_items:

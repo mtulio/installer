@@ -1,4 +1,3 @@
----
 - name: include metadata.json vars
   include_vars:
     file: "{{ ocp.assets_dir }}/metadata.json"
@@ -19,12 +18,12 @@
   copy:
     content: "{{ ocp_ovirt.ovirt_ca_bundle }}"
     dest: "{{ ovirt_ca_file }}"
-    force: no
+    force: false
   when: ovirt_ca_file is defined
 
 - name: Login to oVirt engine
   ovirt_auth:
-    url: "{{ ocp_ovirt.ovirt_url}}"
+    url: "{{ ocp_ovirt.ovirt_url }}"
     username: "{{ ocp_ovirt.ovirt_username }}"
     password: "{{ ocp_ovirt.ovirt_password }}"
     ca_file: "{{ ovirt_ca_file | default(omit) }}"
