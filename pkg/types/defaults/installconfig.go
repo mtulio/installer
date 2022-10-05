@@ -76,6 +76,7 @@ func SetInstallConfigDefaults(c *types.InstallConfig) {
 	for _, compute := range c.Compute {
 		if compute.Name == types.MachinePoolComputeRoleName {
 			defaultComputePoolUndefined = false
+			break
 		}
 	}
 	if defaultComputePoolUndefined {

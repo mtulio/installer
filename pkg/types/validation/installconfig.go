@@ -430,10 +430,7 @@ func validateControlPlane(platform *types.Platform, pool *types.MachinePool, fld
 
 func validateComputeEdge(platform *types.Platform, p *types.MachinePool, fldPath *field.Path, pfld *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	switch platform.Name() {
-	case aws.Name:
-		break
-	default:
+	if platform.Name() != aws.Name {
 		allErrs = append(allErrs, field.NotSupported(pfld.Child("name"), p.Name, []string{types.MachinePoolComputeRoleName}))
 	}
 

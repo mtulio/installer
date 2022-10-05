@@ -183,9 +183,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 				return subnetGroups, errors.Errorf("Local Zones subnets must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
 			}
 			subnetGroups.Edge[id] = meta
-			continue
-		}
-		if meta.Public {
+		} else if meta.Public {
 			subnetGroups.Public[id] = meta
 
 			// Let public subnets work as if they were private. This allows us to
@@ -196,9 +194,9 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 			if publicOnlySubnets {
 				subnetGroups.Private[id] = meta
 			}
-			continue
+		} else {
+			subnetGroups.Private[id] = meta
 		}
-		subnetGroups.Private[id] = meta
 	}
 	return subnetGroups, nil
 }

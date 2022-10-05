@@ -55,25 +55,24 @@ func Validate(ctx context.Context, meta *Metadata, config *types.InstallConfig) 
 	for idx, compute := range config.Compute {
 		fldPath := field.NewPath("compute").Index(idx)
 
-		if compute.Platform.AWS != nil {
-			switch compute.Name {
-			// Pool's specific validation
-			// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
-			case types.MachinePoolEdgeRoleName:
-				if len(config.Platform.AWS.Subnets) <= 0 {
-					// TODO create a test for this error
-					return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC.").Error())
-				}
-				edgeSubnets, err := meta.EdgeSubnets(ctx)
-				if err != nil {
-					allErrs = append(allErrs, field.Invalid(fldPath, edgeSubnets, err.Error()))
-				}
-				if len(edgeSubnets) <= 0 {
-					// TODO create a test for this error
-					return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool.").Error())
-				}
-				break
+		// Pool's specific validation.
+		// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
+		if compute.Name == types.MachinePoolEdgeRoleName {
+			if len(config.Platform.AWS.Subnets) <= 0 {
+				// TODO create a test for this error
+				return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC.").Error())
 			}
+			edgeSubnets, err := meta.EdgeSubnets(ctx)
+			if err != nil {
+				return append(allErrs, field.Invalid(fldPath, edgeSubnets, err.Error())).ToAggregate()
+			}
+			if len(edgeSubnets) <= 0 {
+				// TODO create a test for this error
+				return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool.").Error())
+			}
+		}
+
+		if compute.Platform.AWS != nil {
 			allErrs = append(allErrs, validateMachinePool(ctx, meta, fldPath.Child("platform", "aws"), config.Platform.AWS, compute.Platform.AWS, computeReq, compute.Name)...)
 		}
 	}
@@ -208,7 +207,6 @@ func validateSubnets(ctx context.Context, meta *Metadata, fldPath *field.Path, s
 
 func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Path, platform *awstypes.Platform, pool *awstypes.MachinePool, req resourceRequirements, poolName string) field.ErrorList {
 	allErrs := field.ErrorList{}
-
 	if len(pool.Zones) > 0 {
 		availableZones := sets.String{}
 		if len(platform.Subnets) > 0 {
