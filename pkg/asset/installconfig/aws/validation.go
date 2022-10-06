@@ -59,16 +59,15 @@ func Validate(ctx context.Context, meta *Metadata, config *types.InstallConfig) 
 		// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
 		if compute.Name == types.MachinePoolEdgeRoleName {
 			if len(config.Platform.AWS.Subnets) <= 0 {
-				// TODO create a test for this error
-				return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC.").Error())
+				return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC").Error())
 			}
 			edgeSubnets, err := meta.EdgeSubnets(ctx)
 			if err != nil {
-				return append(allErrs, field.Invalid(fldPath, edgeSubnets, err.Error())).ToAggregate()
+				errMsg := fmt.Sprintf("%s pool. %v", compute.Name, err.Error())
+				return errors.New(field.Invalid(field.NewPath("platform", "aws", "subnets"), config.Platform.AWS.Subnets, errMsg).Error())
 			}
 			if len(edgeSubnets) <= 0 {
-				// TODO create a test for this error
-				return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool.").Error())
+				return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool").Error())
 			}
 		}
 

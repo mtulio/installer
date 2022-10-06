@@ -193,15 +193,6 @@ func defaultNutanixMachinePoolPlatform() nutanixtypes.MachinePool {
 	}
 }
 
-func awsDefaultMachineTypes(region string, arch types.Architecture) []string {
-	dTypes := awsdefaults.InstanceTypes(region, arch)
-	types := make([]string, len(dTypes))
-	for i, itype := range dTypes {
-		types[i] = itype
-	}
-	return types
-}
-
 // awsDiscoveryPreferredEdgeInstanceByZone discover supported instanceType for each subnet's
 // zone using the preferred list of instances allowed for OCP.
 func awsDiscoveryPreferredEdgeInstanceByZone(ctx context.Context, defaultTypes []string, meta *icaws.Metadata, subnets *icaws.Subnets) (err error) {
@@ -385,7 +376,7 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 			}
 
 			if mpool.InstanceType == "" {
-				instanceTypes := awsDefaultMachineTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture)
+				instanceTypes := awsdefaults.InstanceTypes(installConfig.Config.Platform.AWS.Region, installConfig.Config.ControlPlane.Architecture)
 
 				switch pool.Name {
 				case types.MachinePoolEdgeRoleName:

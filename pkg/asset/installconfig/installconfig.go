@@ -159,7 +159,7 @@ func (a *InstallConfig) Load(f asset.FileFetcher) (found bool, err error) {
 	return true, nil
 }
 
-// finishAWS set defaults for AWS Platform before the config validation
+// finishAWS set defaults for AWS Platform before the config validation.
 func (a *InstallConfig) finishAWS() error {
 
 	// Set the Default Edge Compute pool when the subnets are defined.

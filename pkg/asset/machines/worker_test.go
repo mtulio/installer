@@ -255,9 +255,7 @@ func TestDefaultAWSMachinePoolPlatform(t *testing.T) {
 				mp := defaultAWSMachinePoolPlatform(tc.poolName)
 				want := tc.expectedMachinePool.EC2RootVolume.Type
 				got := mp.EC2RootVolume.Type
-				if assert.Equal(t, want, got) {
-					assert.Equal(t, want, got, "unexepcted EBS type")
-				}
+				assert.Equal(t, want, got, "unexepcted EBS type")
 			},
 		},
 		{
@@ -273,9 +271,7 @@ func TestDefaultAWSMachinePoolPlatform(t *testing.T) {
 				mp := defaultAWSMachinePoolPlatform(tc.poolName)
 				want := tc.expectedMachinePool.EC2RootVolume.Type
 				got := mp.EC2RootVolume.Type
-				if assert.Equal(t, want, got) {
-					assert.Equal(t, want, got, "unexepcted EBS type")
-				}
+				assert.Equal(t, want, got, "unexepcted EBS type")
 			},
 		},
 	}
