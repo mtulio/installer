@@ -52,7 +52,7 @@ func Machines(clusterID string, region string, subnets map[string]string, pool *
 		if len(subnets) > 0 && !ok {
 			return nil, nil, errors.Errorf("no subnet for zone %s", zone)
 		}
-		machineProviderInput := machineProviderInput{
+		machineInput := machineProviderInput{
 			clusterID:      clusterID,
 			region:         region,
 			subnet:         subnet,
@@ -66,7 +66,7 @@ func Machines(clusterID string, region string, subnets map[string]string, pool *
 			userTags:       userTags,
 			privateSubnet:  false,
 		}
-		provider, err := provider(&machineProviderInput)
+		provider, err := provider(&machineInput)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to create provider")
 		}

@@ -18,6 +18,9 @@ import (
 
 // MachineSets returns a list of machinesets for a machinepool.
 func MachineSets(clusterID string, region string, subnets *icaws.Subnets, pool *types.MachinePool, role, userDataSecret string, userTags map[string]string) ([]*machineapi.MachineSet, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("invalid pool")
+	}
 	if poolPlatform := pool.Platform.Name(); poolPlatform != aws.Name {
 		return nil, fmt.Errorf("non-AWS machine-pool: %q", poolPlatform)
 	}
