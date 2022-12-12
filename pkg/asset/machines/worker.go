@@ -25,7 +25,6 @@ import (
 	libvirtprovider "github.com/openshift/cluster-api-provider-libvirt/pkg/apis/libvirtproviderconfig/v1beta1"
 	ovirtproviderapi "github.com/openshift/cluster-api-provider-ovirt/pkg/apis"
 	ovirtprovider "github.com/openshift/cluster-api-provider-ovirt/pkg/apis/ovirtprovider/v1beta1"
-	"k8s.io/utils/pointer"
 
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/ignition/machine"
@@ -329,25 +328,26 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 				machineSets = append(machineSets, set)
 			}
 		case awstypes.Name:
-			subnets := make(icaws.Subnets, len(ic.Platform.AWS.Subnets))
+			subnets := icaws.Subnets{}
 			if len(ic.Platform.AWS.Subnets) > 0 {
-				subnetMeta := make(map[string]icaws.Subnet, len(ic.Platform.AWS.Subnets))
+				var subnetsMeta icaws.Subnets
 				switch pool.Name {
 				case types.MachinePoolEdgeRoleName:
-					subnetMeta, err = installConfig.AWS.EdgeSubnets(ctx)
+					subnetsMeta, err = installConfig.AWS.EdgeSubnets(ctx)
 					if err != nil {
 						return err
 					}
 					if *pool.Replicas == 0 {
-						pool.Replicas = pointer.Int64Ptr(int64(len(subnetMeta)))
+						sbCount := int64(len(subnetsMeta))
+						pool.Replicas = &sbCount
 					}
 				default:
-					subnetMeta, err = installConfig.AWS.PrivateSubnets(ctx)
+					subnetsMeta, err = installConfig.AWS.PrivateSubnets(ctx)
 					if err != nil {
 						return err
 					}
 				}
-				for _, subnet := range subnetMeta {
+				for _, subnet := range subnetsMeta {
 					subnets[subnet.Zone] = subnet
 				}
 			}
@@ -388,7 +388,6 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 						logrus.Warn(errors.Wrap(err, "failed to find default instance type for edge pool"))
 						mpool.InstanceType = instanceTypes[0]
 					}
-					break
 				default:
 					mpool.InstanceType, err = aws.PreferredInstanceType(ctx, installConfig.AWS, instanceTypes, mpool.Zones)
 					if err != nil {
