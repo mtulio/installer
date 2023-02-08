@@ -197,7 +197,7 @@ func (no *Networking) generateDefaultNetworkConfig(defaultNetwork *operatorv1.De
 func (no *Networking) generateDefaultNetworkConfigAWSEdge(ic *installconfig.InstallConfig) ([]byte, bool, error) {
 
 	var (
-		hasEdgePool bool = false
+		hasEdgePool = false
 		defNetCfg   *operatorv1.DefaultNetworkDefinition
 		err         error
 	)
