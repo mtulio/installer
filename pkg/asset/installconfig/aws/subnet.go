@@ -172,7 +172,7 @@ func subnets(ctx context.Context, session *session.Session, region string, ids [
 		if meta.ZoneType == typesaws.LocalZoneType {
 			// Local Zones is supported only in Public subnets
 			if !meta.Public {
-				return subnetGroups, errors.Errorf("subnet tyoe local-zone must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
+				return subnetGroups, errors.Errorf("subnet with zone type 'local-zone' must be associated with public route tables: subnet %s from availability zone %s[%s] is public[%v]", id, meta.Zone, meta.ZoneType, meta.Public)
 			}
 			subnetGroups.Edge[id] = meta
 			continue
