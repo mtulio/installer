@@ -385,16 +385,24 @@ func (w *Worker) Generate(dependencies asset.Parents) error {
 					fmt.Printf(">>>awsDiscoveryPreferredEdgeInstanceByZone instanceTypes=%s   subnets=%v\n", instanceTypes, subnets)
 					//sbs := icaws.Subnets{}
 					if len(subnets) == 0 {
+						fmt.Printf(">>>len(subnets) == 0\n")
 						for _, zone := range mpool.Zones {
 							sb := icaws.Subnet{
-								Zone:     zone,
-								ZoneType: "local-zone",
-								Public:   true,
+								Zone:   zone,
+								Public: true,
 							}
-
-							sb.PopulateZoneAttributes(ctx, sess)
+							sess, err := installConfig.AWS.Session(ctx)
+							if err != nil {
+								return errors.Wrap(err, "unable to get aws session to populate zone details")
+							}
+							err = sb.PopulateZoneAttributes(ctx, sess)
+							if err != nil {
+								return errors.Wrap(err, "unable to populate zone details")
+							}
 							subnets[zone] = sb
 						}
+						//installConfig.AWS.AvailabilityZones(ctx)
+						// err := installConfig.AWS.PopulateZoneAttributes()
 					}
 					fmt.Printf(">>>sbs=%v\n", subnets)
 					ok, err := awsDiscoveryPreferredEdgeInstanceByZone(ctx, instanceTypes, installConfig.AWS, subnets)

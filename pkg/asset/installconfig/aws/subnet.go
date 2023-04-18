@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"k8s.io/utils/pointer"
 
 	typesaws "github.com/openshift/installer/pkg/types/aws"
 )
@@ -49,15 +50,29 @@ type Subnet struct {
 }
 
 func (s *Subnet) PopulateZoneAttributes(ctx context.Context, sess *session.Session) error {
+
 	re := regexp.MustCompile(`^([a-zA-Z]+-)+\d+`)
 	region := re.FindString(s.Zone)
+	zoneNames := []*string{pointer.String(s.Zone)}
+
 	client := ec2.New(sess, aws.NewConfig().WithRegion(region))
-	azs, err := client.DescribeAvailabilityZonesWithContext(ctx, &ec2.DescribeAvailabilityZonesInput{ZoneNames: []*string{s.Zone}})
+	azs, err := client.DescribeAvailabilityZonesWithContext(ctx, &ec2.DescribeAvailabilityZonesInput{ZoneNames: zoneNames})
 	if err != nil {
 		return errors.Wrap(err, "describing availability zones")
 	}
+
+	var zoneMeta *ec2.AvailabilityZone
 	for _, az := range azs.AvailabilityZones {
-		s.ZoneGroupName = *az.GroupName
+		if *az.ZoneName == s.Zone {
+			zoneMeta = az
+			break
+		}
+	}
+	if s.ZoneGroupName == "" {
+		s.ZoneGroupName = *zoneMeta.GroupName
+	}
+	if s.ZoneType == "" {
+		s.ZoneType = *zoneMeta.ZoneType
 	}
 
 	return nil
