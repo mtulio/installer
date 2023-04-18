@@ -16,6 +16,7 @@ import (
 type Metadata struct {
 	session           *session.Session
 	availabilityZones []string
+	edgeZones         []string
 	privateSubnets    map[string]Subnet
 	publicSubnets     map[string]Subnet
 	edgeSubnets       map[string]Subnet
@@ -74,6 +75,26 @@ func (m *Metadata) AvailabilityZones(ctx context.Context) ([]string, error) {
 	}
 
 	return m.availabilityZones, nil
+}
+
+// LocalZones retrieves a list of availability zones for the configured region.
+func (m *Metadata) EdgeZones(ctx context.Context) ([]string, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if len(m.edgeZones) == 0 {
+		session, err := m.unlockedSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		m.edgeZones, err = localZones(ctx, session, m.Region)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating AWS session")
+		}
+	}
+
+	return m.edgeZones, nil
 }
 
 // EdgeSubnets retrieves subnet metadata indexed by subnet ID, for

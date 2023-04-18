@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -47,7 +48,22 @@ type Subnet struct {
 	PreferredEdgeInstanceType string
 }
 
-// Subnets is the map for the Subnet metadata.
+func (s *Subnet) PopulateZoneAttributes(ctx context.Context, sess *session.Session) error {
+	re := regexp.MustCompile(`^([a-zA-Z]+-)+\d+`)
+	region := re.FindString(s.Zone)
+	client := ec2.New(sess, aws.NewConfig().WithRegion(region))
+	azs, err := client.DescribeAvailabilityZonesWithContext(ctx, &ec2.DescribeAvailabilityZonesInput{ZoneNames: []*string{s.Zone}})
+	if err != nil {
+		return errors.Wrap(err, "describing availability zones")
+	}
+	for _, az := range azs.AvailabilityZones {
+		s.ZoneGroupName = *az.GroupName
+	}
+
+	return nil
+}
+
+// Subnets is the map for the Subnet metadata grouped by zone.
 type Subnets map[string]Subnet
 
 // SubnetGroups is the group of subnets used by installer.

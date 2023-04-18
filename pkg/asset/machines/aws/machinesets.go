@@ -29,6 +29,7 @@ func MachineSets(clusterID string, region string, subnets icaws.Subnets, pool *t
 	}
 	numOfAZs := int64(len(azs))
 	var machinesets []*machineapi.MachineSet
+	fmt.Printf("\n zones: %s\n", mpool.Zones)
 	for idx, az := range mpool.Zones {
 		replicas := int32(total / numOfAZs)
 		if int64(idx) < total%numOfAZs {
@@ -38,13 +39,14 @@ func MachineSets(clusterID string, region string, subnets icaws.Subnets, pool *t
 		if len(subnets) > 0 && !ok {
 			return nil, errors.Errorf("no subnet for zone %s", az)
 		}
-
+		fmt.Printf("\n zones 2: %s\n", mpool.Zones)
 		publicSubnet := subnet.Public
 		instanceType := mpool.InstanceType
 		nodeLabels := make(map[string]string, 3)
 		nodeTaints := []corev1.Taint{}
 
 		if pool.Name == types.MachinePoolEdgeRoleName {
+			fmt.Printf("\n zones 3: %s\n", mpool.Zones)
 			// edge pools typically do not receive the same workloads between
 			// different zoneGroups, thus the installer will discover preferred
 			// instance based on the installer's preferred instance lookup.

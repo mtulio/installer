@@ -52,3 +52,23 @@ func availabilityZones(ctx context.Context, session *session.Session, region str
 
 	return zones, nil
 }
+
+// localZones retrieves a list of zones type 'local-zone' for the region.
+func localZones(ctx context.Context, session *session.Session, region string) ([]string, error) {
+	azs, err := describeAvailabilityZones(ctx, session, region)
+	if err != nil {
+		return nil, errors.Wrap(err, "fetching local zones")
+	}
+	zones := []string{}
+	for _, zone := range azs {
+		if *zone.ZoneType == typesaws.LocalZoneType {
+			zones = append(zones, *zone.ZoneName)
+		}
+	}
+
+	if len(zones) == 0 {
+		return nil, errors.Errorf("no available zones in %s", region)
+	}
+
+	return zones, nil
+}

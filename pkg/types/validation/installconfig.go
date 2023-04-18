@@ -122,6 +122,7 @@ func ValidateInstallConfig(c *types.InstallConfig, usingAgentMethod bool) field.
 	} else {
 		allErrs = append(allErrs, field.Required(field.NewPath("controlPlane"), "controlPlane is required"))
 	}
+	fmt.Println(">>> validateCompute()")
 	allErrs = append(allErrs, validateCompute(&c.Platform, c.ControlPlane, c.Compute, field.NewPath("compute"))...)
 	if err := validate.ImagePullSecret(c.PullSecret); err != nil {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("pullSecret"), c.PullSecret, err.Error()))
@@ -462,8 +463,10 @@ func validateCompute(platform *types.Platform, control *types.MachinePool, pools
 		switch p.Name {
 		case types.MachinePoolComputeRoleName:
 		case types.MachinePoolEdgeRoleName:
+			fmt.Println(">>> 1")
 			allErrs = append(allErrs, validateComputeEdge(platform, p.Name, poolFldPath, poolFldPath)...)
 		default:
+			fmt.Println(">>> 2")
 			allErrs = append(allErrs, field.NotSupported(poolFldPath.Child("name"), p.Name, []string{types.MachinePoolComputeRoleName, types.MachinePoolEdgeRoleName}))
 		}
 

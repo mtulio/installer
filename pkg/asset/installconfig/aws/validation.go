@@ -56,18 +56,25 @@ func Validate(ctx context.Context, meta *Metadata, config *types.InstallConfig) 
 		fldPath := field.NewPath("compute").Index(idx)
 
 		// Pool's specific validation.
-		// Edge Compute Pool: AWS Local Zones is valid only when installing in existing VPC.
+		// Edge Compute Pool / AWS Local Zones:
+		// - is valid when installing in existing VPC; or
+		// - is valid in new VPC when zone names are defined
 		if compute.Name == types.MachinePoolEdgeRoleName {
-			if len(config.Platform.AWS.Subnets) == 0 {
+			newVPC := len(config.Platform.AWS.Subnets) == 0
+			zoneDefined := len(compute.Platform.AWS.Zones) > 0
+			fmt.Println(newVPC, zoneDefined)
+			if newVPC && !zoneDefined {
 				return errors.New(field.Required(fldPath, "invalid install config. edge machine pool is valid when installing in existing VPC").Error())
 			}
-			edgeSubnets, err := meta.EdgeSubnets(ctx)
-			if err != nil {
-				errMsg := fmt.Sprintf("%s pool. %v", compute.Name, err.Error())
-				return errors.New(field.Invalid(field.NewPath("platform", "aws", "subnets"), config.Platform.AWS.Subnets, errMsg).Error())
-			}
-			if len(edgeSubnets) == 0 {
-				return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool").Error())
+			if !newVPC {
+				edgeSubnets, err := meta.EdgeSubnets(ctx)
+				if err != nil {
+					errMsg := fmt.Sprintf("%s pool. %v", compute.Name, err.Error())
+					return errors.New(field.Invalid(field.NewPath("platform", "aws", "subnets"), config.Platform.AWS.Subnets, errMsg).Error())
+				}
+				if len(edgeSubnets) == 0 {
+					return errors.New(field.Required(fldPath, "invalid install config. There is no valid subnets for edge machine pool").Error())
+				}
 			}
 		}
 
@@ -205,16 +212,15 @@ func validateSubnets(ctx context.Context, meta *Metadata, fldPath *field.Path, s
 }
 
 func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Path, platform *awstypes.Platform, pool *awstypes.MachinePool, req resourceRequirements, poolName string) field.ErrorList {
+	var err error
 	allErrs := field.ErrorList{}
 	if len(pool.Zones) > 0 {
 		availableZones := sets.String{}
 		if len(platform.Subnets) > 0 {
-			var err error
 			var subnets Subnets
-			switch poolName {
-			case types.MachinePoolEdgeRoleName:
+			if poolName == types.MachinePoolEdgeRoleName {
 				subnets, err = meta.EdgeSubnets(ctx)
-			default:
+			} else {
 				subnets, err = meta.PrivateSubnets(ctx)
 			}
 			if err != nil {
@@ -224,7 +230,12 @@ func validateMachinePool(ctx context.Context, meta *Metadata, fldPath *field.Pat
 				availableZones.Insert(subnet.Zone)
 			}
 		} else {
-			allzones, err := meta.AvailabilityZones(ctx)
+			var allzones []string
+			if poolName == types.MachinePoolEdgeRoleName {
+				allzones, err = meta.EdgeZones(ctx)
+			} else {
+				allzones, err = meta.AvailabilityZones(ctx)
+			}
 			if err != nil {
 				return append(allErrs, field.InternalError(fldPath, err))
 			}

@@ -26,15 +26,21 @@ func SetMachinePoolDefaults(p *types.MachinePool, platform string) {
 	}
 }
 
-// CreateEdgeMachinePoolDefaults create the edge compute pool when it is not already defined.
-func CreateEdgeMachinePoolDefaults(pools []types.MachinePool, platform string, replicas int64) *types.MachinePool {
+// Check if the Edge compute pool have been defined
+func HasEdgePoolConfig(pools []types.MachinePool) bool {
 	edgePoolDefined := false
 	for _, compute := range pools {
 		if compute.Name == types.MachinePoolEdgeRoleName {
 			edgePoolDefined = true
 		}
 	}
-	if edgePoolDefined {
+	return edgePoolDefined
+}
+
+// CreateEdgeMachinePoolDefaults create the edge compute pool when it is not already defined.
+func CreateEdgeMachinePoolDefaults(pools []types.MachinePool, platform string, replicas int64) *types.MachinePool {
+
+	if !HasEdgePoolConfig(pools) {
 		return nil
 	}
 	pool := &types.MachinePool{
