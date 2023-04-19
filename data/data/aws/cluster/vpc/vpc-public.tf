@@ -58,11 +58,33 @@ resource "aws_subnet" "public_subnet" {
   )
 }
 
+resource "aws_subnet" "edge_subnet" {
+  count = var.edge_subnets == null ? length(var.edge_zones) : 0
+
+  vpc_id            = data.aws_vpc.cluster_vpc.id
+  cidr_block        = cidrsubnet(local.new_edge_cidr_range, ceil(log(length(var.edge_zones), 2)), count.index)
+  availability_zone = var.edge_zones[count.index]
+
+  tags = merge(
+    {
+      "Name" = "${var.cluster_id}-public-${var.edge_zones[count.index]}"
+    },
+    var.tags,
+  )
+}
+
 resource "aws_route_table_association" "route_net" {
   count = var.public_subnets == null ? length(var.availability_zones) : 0
 
   route_table_id = aws_route_table.default[0].id
   subnet_id      = aws_subnet.public_subnet[count.index].id
+}
+
+resource "aws_route_table_association" "route_net_edge" {
+  count = var.edge_subnets == null ? length(var.edge_zones) : 0
+
+  route_table_id = aws_route_table.default[0].id
+  subnet_id      = aws_subnet.edge_subnet[count.index].id
 }
 
 resource "aws_eip" "nat_eip" {

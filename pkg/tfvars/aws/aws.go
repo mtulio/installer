@@ -4,6 +4,7 @@ package aws
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -23,6 +24,7 @@ type config struct {
 	MasterInstanceType           string            `json:"aws_master_instance_type,omitempty"`
 	MasterAvailabilityZones      []string          `json:"aws_master_availability_zones"`
 	WorkerAvailabilityZones      []string          `json:"aws_worker_availability_zones"`
+	EdgeLocalZones               []string          `json:"aws_edge_local_zones"`
 	IOPS                         int64             `json:"aws_master_root_volume_iops"`
 	Size                         int64             `json:"aws_master_root_volume_size,omitempty"`
 	Type                         string            `json:"aws_master_root_volume_type,omitempty"`
@@ -32,6 +34,7 @@ type config struct {
 	VPC                          string            `json:"aws_vpc,omitempty"`
 	PrivateSubnets               []string          `json:"aws_private_subnets,omitempty"`
 	PublicSubnets                *[]string         `json:"aws_public_subnets,omitempty"`
+	EdgeSubnets                  []string          `json:"aws_edge_subnets,omitempty"`
 	InternalZone                 string            `json:"aws_internal_zone,omitempty"`
 	PublishStrategy              string            `json:"aws_publish_strategy,omitempty"`
 	IgnitionBucket               string            `json:"aws_ignition_bucket"`
@@ -83,19 +86,45 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 	}
 
 	masterAvailabilityZones := make([]string, len(sources.MasterConfigs))
+	fmt.Printf("\n>> for masterAvailabilityZones: %v\n", masterAvailabilityZones)
 	for i, c := range sources.MasterConfigs {
+		fmt.Println(c.Placement.AvailabilityZone)
 		masterAvailabilityZones[i] = c.Placement.AvailabilityZone
 	}
 
 	exists := struct{}{}
 	availabilityZoneMap := map[string]struct{}{}
+	edgeZoneMap := map[string]struct{}{}
+	fmt.Println(sources)
+	fmt.Println(">> for WorkerConfigs")
+	reLocalZone := regexp.MustCompile(`^([a-zA-Z]+-)+\d+-[a-zA-Z]{3}-[0-9][a-z]`)
+	// region := re.FindString(s.Zone)
 	for _, c := range sources.WorkerConfigs {
+		// check if it's edge/local zones
+		fmt.Println(c.Placement.AvailabilityZone)
+		if reLocalZone.MatchString(c.Placement.AvailabilityZone) {
+			fmt.Println(">> for Edge found")
+			edgeZoneMap[c.Placement.AvailabilityZone] = exists
+			continue
+		}
 		availabilityZoneMap[c.Placement.AvailabilityZone] = exists
 	}
 	workerAvailabilityZones := make([]string, 0, len(availabilityZoneMap))
+
+	fmt.Printf("\n>> for availabilityZoneMap: %v\n", availabilityZoneMap)
+	var edgeLocalZones []string
 	for zone := range availabilityZoneMap {
+		fmt.Println(zone)
 		workerAvailabilityZones = append(workerAvailabilityZones, zone)
 	}
+	fmt.Printf("\n>> for edgeZoneMap: %v\n", edgeZoneMap)
+	for zone := range edgeZoneMap {
+		fmt.Println(zone)
+		edgeLocalZones = append(edgeLocalZones, zone)
+	}
+
+	fmt.Printf("\n>> 1sources.PublicSubnets: %v\n", sources.PublicSubnets)
+	fmt.Printf("\n>> 1sources.PrivateSubnets: %v\n", sources.PrivateSubnets)
 
 	if len(masterConfig.BlockDevices) == 0 {
 		return nil, errors.New("block device slice cannot be empty")
@@ -118,12 +147,18 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		return nil, errors.New("EBS IOPS must be configured for the io1 root volume")
 	}
 
+	fmt.Printf("\n>> Final masterAvailabilityZones: %v\n", masterAvailabilityZones)
+	fmt.Printf("\n>> Final workerAvailabilityZones: %v\n", workerAvailabilityZones)
+	fmt.Printf("\n>> Final edgeLocalZones: %v\n", edgeLocalZones)
+	fmt.Printf("\n>> Final sources.InternalZone: %v\n", sources.InternalZone)
+
 	cfg := &config{
 		CustomEndpoints:         endpoints,
 		Region:                  masterConfig.Placement.Region,
 		ExtraTags:               tags,
 		MasterAvailabilityZones: masterAvailabilityZones,
 		WorkerAvailabilityZones: workerAvailabilityZones,
+		EdgeLocalZones:          edgeLocalZones,
 		BootstrapInstanceType:   masterConfig.InstanceType,
 		MasterInstanceType:      masterConfig.InstanceType,
 		Size:                    *rootVolume.EBS.VolumeSize,
@@ -136,6 +171,7 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		MasterIAMRoleName:       sources.MasterIAMRoleName,
 		WorkerIAMRoleName:       sources.WorkerIAMRoleName,
 	}
+	fmt.Printf(">> cfg: %v", cfg)
 
 	stubIgn, err := bootstrap.GenerateIgnitionShimWithCertBundleAndProxy(sources.IgnitionPresignedURL, sources.AdditionalTrustBundle, sources.Proxy)
 	if err != nil {
@@ -148,6 +184,9 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		return nil, fmt.Errorf("rendered bootstrap ignition shim exceeds the 16KB limit for AWS user data -- try reducing the size of your CA cert bundle")
 	}
 	cfg.BootstrapIgnitionStub = string(stubIgn)
+
+	fmt.Printf("\n>> 2sources.PublicSubnets: %v\n", sources.PublicSubnets)
+	fmt.Printf("\n>> 2sources.PrivateSubnets: %v\n", sources.PrivateSubnets)
 
 	if len(sources.PublicSubnets) == 0 {
 		if cfg.VPC != "" {
@@ -183,5 +222,6 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		cfg.MasterMetadataAuthentication = strings.ToLower(string(masterConfig.MetadataServiceOptions.Authentication))
 	}
 
+	//os.Exit(1)
 	return json.MarshalIndent(cfg, "", "  ")
 }

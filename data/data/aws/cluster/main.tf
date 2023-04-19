@@ -84,6 +84,7 @@ module "vpc" {
   vpc              = var.aws_vpc
   public_subnets   = var.aws_public_subnets
   private_subnets  = var.aws_private_subnets
+  edge_subnets     = var.aws_edge_subnets
   publish_strategy = var.aws_publish_strategy
 
   availability_zones = distinct(
@@ -92,6 +93,7 @@ module "vpc" {
       var.aws_worker_availability_zones,
     ),
   )
+  edge_zones = var.aws_edge_local_zones
 
   tags = local.tags
 }

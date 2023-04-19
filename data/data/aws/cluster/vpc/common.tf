@@ -24,3 +24,9 @@ data "aws_subnet" "private" {
 
   id = var.private_subnets == null ? aws_subnet.private_subnet[count.index].id : var.private_subnets[count.index]
 }
+
+data "aws_subnet" "edge" {
+  count = var.edge_subnets == null ? length(var.edge_zones) : length(var.edge_subnets)
+
+  id = var.edge_subnets == null ? aws_subnet.edge_subnet[count.index].id : var.edge_subnets[count.index]
+}

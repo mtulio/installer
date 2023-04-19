@@ -1,6 +1,9 @@
 locals {
-  new_private_cidr_range = cidrsubnet(data.aws_vpc.cluster_vpc.cidr_block, 1, 1)
-  new_public_cidr_range  = cidrsubnet(data.aws_vpc.cluster_vpc.cidr_block, 1, 0)
+  cidr_part1 = cidrsubnet(data.aws_vpc.cluster_vpc.cidr_block, 1, 0)
+  cidr_part2 = cidrsubnet(data.aws_vpc.cluster_vpc.cidr_block, 1, 1)
+  new_private_cidr_range = local.cidr_part1
+  new_public_cidr_range  = cidrsubnet(local.cidr_part2, 1, 0)
+  new_edge_cidr_range  = cidrsubnet(local.cidr_part2, 1, 1)
 }
 
 resource "aws_vpc" "new_vpc" {

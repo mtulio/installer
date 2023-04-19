@@ -3,6 +3,11 @@ variable "availability_zones" {
   description = "The availability zones in which to provision subnets."
 }
 
+variable "edge_zones" {
+  type        = list(string)
+  description = "The availability zones in which to provision subnets."
+}
+
 variable "cidr_blocks" {
   type        = list(string)
   description = "A list of IPv4 CIDRs with 0 index being the main CIDR."
@@ -41,4 +46,9 @@ variable "public_subnets" {
 variable "private_subnets" {
   type        = list(string)
   description = "Existing private subnets into which the cluster should be installed."
+}
+
+variable "edge_subnets" {
+  type        = list(string)
+  description = "Existing edge subnets into which the cluster should be installed."
 }
