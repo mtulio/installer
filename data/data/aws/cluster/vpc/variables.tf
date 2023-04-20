@@ -5,6 +5,7 @@ variable "availability_zones" {
 
 variable "edge_zones" {
   type        = list(string)
+  default     = []
   description = "The availability zones in which to provision subnets."
 }
 

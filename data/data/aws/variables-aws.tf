@@ -116,6 +116,7 @@ variable "aws_worker_availability_zones" {
 
 variable "aws_edge_local_zones" {
   type        = list(string)
+  default     = []
   description = "The zones to provision for edge pool. Edge instances are created by the machine-API operator, but this variable controls their supporting infrastructure (subnets, routing, etc.)."
 }
 

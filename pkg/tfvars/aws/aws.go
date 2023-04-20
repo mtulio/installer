@@ -24,7 +24,7 @@ type config struct {
 	MasterInstanceType           string            `json:"aws_master_instance_type,omitempty"`
 	MasterAvailabilityZones      []string          `json:"aws_master_availability_zones"`
 	WorkerAvailabilityZones      []string          `json:"aws_worker_availability_zones"`
-	EdgeLocalZones               []string          `json:"aws_edge_local_zones"`
+	EdgeLocalZones               []string          `json:"aws_edge_local_zones,omitempty"`
 	IOPS                         int64             `json:"aws_master_root_volume_iops"`
 	Size                         int64             `json:"aws_master_root_volume_size,omitempty"`
 	Type                         string            `json:"aws_master_root_volume_type,omitempty"`
