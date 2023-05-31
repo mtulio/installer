@@ -2487,6 +2487,18 @@ spec:
                 required:
                 - hosts
                 type: object
+              external:
+                description: External is the configuration used when an external platform
+                  provider is used.
+                properties:
+                  platformName:
+                    default: Unknown
+                    description: PlatformName holds the arbitrary string representing
+                      the infrastructure provider name, expected to be set at the
+                      installation time. This field is solely for informational and
+                      reporting purposes and is not expected to be used for decision-making.
+                    type: string
+                type: object
               gcp:
                 description: GCP is the configuration used when installing on Google
                   Cloud Platform.
