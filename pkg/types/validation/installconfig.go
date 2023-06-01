@@ -1060,6 +1060,10 @@ func validateFeatureSet(c *types.InstallConfig) field.ErrorList {
 			}
 		}
 
+		if c.Platform.External != nil {
+			allErrs = append(allErrs, field.Forbidden(field.NewPath("platform", "external"), errMsg))
+		}
+
 		if c.OpenStack != nil {
 			for _, f := range openstackvalidation.FilledInTechPreviewFields(c) {
 				allErrs = append(allErrs, field.Forbidden(f, errMsg))
