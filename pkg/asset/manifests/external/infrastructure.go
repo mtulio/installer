@@ -13,3 +13,12 @@ func GetInfraPlatformSpec(ic *installconfig.InstallConfig) *configv1.ExternalPla
 		PlatformName: icPlatformSpec.PlatformName,
 	}
 }
+
+// GetInfraPlatformStatus constructs ExternalPlatformStatus for the infrastructure status.
+func GetInfraPlatformStatus() *configv1.ExternalPlatformStatus {
+	return &configv1.ExternalPlatformStatus{
+		CloudControllerManager: configv1.CloudControllerManagerStatus{
+			State: configv1.CloudControllerManagerExternal,
+		},
+	}
+}
