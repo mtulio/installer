@@ -45,7 +45,9 @@ func ValidateMachinePool(p *azure.MachinePool, poolName string, platform *azure.
 		diskTypes := sets.NewString(
 			"StandardSSD_LRS",
 			// "UltraSSD_LRS" needs azure terraform version 2.0
-			"Premium_LRS")
+			"Premium_LRS",
+			"PremiumV2_LRS",
+		)
 		// The control plane cannot use Standard_LRS. Don't let the default machine pool specify "Standard_LRS" either.
 		if poolName != "" && poolName != "master" {
 			diskTypes.Insert("Standard_LRS")
@@ -55,6 +57,8 @@ func ValidateMachinePool(p *azure.MachinePool, poolName string, platform *azure.
 			allErrs = append(allErrs, field.NotSupported(fldPath.Child("diskType"), p.OSDisk.DiskType, diskTypes.List()))
 		}
 	}
+
+	// TODO add valdiation for Data Disks
 
 	if p.UltraSSDCapability != "" {
 		ultraSSDCapabilities := sets.NewString("Enabled", "Disabled")

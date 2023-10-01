@@ -158,3 +158,27 @@ resource "azurerm_linux_virtual_machine" "master" {
 
   tags = var.azure_extra_tags
 }
+
+resource "azurerm_managed_disk" "etcd" {
+  count = length(var.data_disks) == 0 ? 0 : var.instance_count
+
+  name                 = "${var.cluster_id}-master-${count.index}_${var.data_disks[0].name}"
+  location             = var.region
+  resource_group_name  = var.resource_group_name
+  zone                 = var.availability_zones[count.index] != "" ? var.availability_zones[count.index] : null
+  storage_account_type = var.data_disks[0].storage_account_type
+  create_option        = "Empty"
+  disk_size_gb         = var.data_disks[0].disk_size_gb
+
+  tags = var.azure_extra_tags
+}
+
+
+resource "azurerm_virtual_machine_data_disk_attachment" "etcd" {
+  count = length(var.data_disks) == 0 ? 0 : var.instance_count
+
+  managed_disk_id    = azurerm_managed_disk.etcd[count.index].id
+  virtual_machine_id = azurerm_linux_virtual_machine.master[count.index].id
+  lun                = var.data_disks[0].lun
+  caching            = "None"
+}

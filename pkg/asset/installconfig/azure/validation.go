@@ -728,7 +728,7 @@ func validateMarketplaceImage(client API, region string, instanceHyperVGenSet se
 func validateAzureStackDiskType(_ API, installConfig *types.InstallConfig) field.ErrorList {
 	var allErrs field.ErrorList
 
-	supportedTypes := sets.New("Premium_LRS", "Standard_LRS")
+	supportedTypes := sets.New("PremiumV2_LRS", "Premium_LRS", "Standard_LRS")
 	errMsg := fmt.Sprintf("disk format not supported. Must be one of %v", sets.List(supportedTypes))
 
 	defaultDiskType := aztypes.DefaultDiskType

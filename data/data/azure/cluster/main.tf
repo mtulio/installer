@@ -36,6 +36,7 @@ module "master" {
   instance_count             = var.master_count
   os_volume_type             = var.azure_master_root_volume_type
   os_volume_size             = var.azure_master_root_volume_size
+  data_disks                 = var.azure_controlplane_data_disks
   private                    = var.azure_private
   outbound_type              = var.azure_outbound_routing_type
   ultra_ssd_enabled          = var.azure_control_plane_ultra_ssd_enabled

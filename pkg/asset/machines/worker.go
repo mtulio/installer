@@ -18,6 +18,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1alpha1 "github.com/openshift/api/machine/v1alpha1"
+	machineapi "github.com/openshift/api/machine/v1beta1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	baremetalapi "github.com/openshift/cluster-api-provider-baremetal/pkg/apis"
 	baremetalprovider "github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1"
@@ -122,6 +123,18 @@ func defaultAzureMachinePoolPlatform() azuretypes.MachinePool {
 		OSDisk: azuretypes.OSDisk{
 			DiskSizeGB: powerOfTwoRootVolumeSize,
 			DiskType:   azuretypes.DefaultDiskType,
+		},
+		DataDisks: []machineapi.DataDisk{
+			{
+				NameSuffix: "etcd",
+				DiskSizeGB: 16,
+				ManagedDisk: machineapi.DataDiskManagedDiskParameters{
+					StorageAccountType: "PremiumV2_LRS",
+				},
+				Lun:            0,
+				CachingType:    "None",
+				DeletionPolicy: "Delete",
+			},
 		},
 	}
 }

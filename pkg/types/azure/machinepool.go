@@ -1,5 +1,9 @@
 package azure
 
+import (
+	machineapi "github.com/openshift/api/machine/v1beta1"
+)
+
 // SecurityTypes represents the SecurityType of the virtual machine.
 type SecurityTypes string
 
@@ -34,6 +38,11 @@ type MachinePool struct {
 	//
 	// +optional
 	OSDisk `json:"osDisk"`
+
+	// DataDisks defines the additional storage for instance.
+	//
+	// +optional
+	DataDisks []machineapi.DataDisk `json:"dataDisks"`
 
 	// ultraSSDCapability defines if the instance should use Ultra SSD disks.
 	//
@@ -155,6 +164,10 @@ func (a *MachinePool) Set(required *MachinePool) {
 
 	if required.OSDisk.DiskType != "" {
 		a.OSDisk.DiskType = required.OSDisk.DiskType
+	}
+
+	if len(required.DataDisks) > 0 {
+		a.DataDisks = required.DataDisks
 	}
 
 	if required.DiskEncryptionSet != nil {

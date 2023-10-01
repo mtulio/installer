@@ -3,6 +3,7 @@ package manifests
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -72,6 +73,7 @@ func (o *Openshift) Dependencies() []asset.Asset {
 		&openshift.BaremetalConfig{},
 		new(rhcos.Image),
 		&openshift.AzureCloudProviderSecret{},
+		&openshift.MachineConfigMountDevice{},
 	}
 }
 
@@ -298,6 +300,52 @@ func (o *Openshift) Generate(dependencies asset.Parents) error {
 			assetData[name] = applyTemplateData(f.Data, map[string]string{
 				"CloudConfig": string(b),
 			})
+		}
+	}
+
+	if len(installConfig.Config.ControlPlane.MountDevices) != 0 {
+
+		fmt.Printf("Mount device: %v\n", installConfig.Config.ControlPlane.MountDevices)
+		machineConfigMountDevice := &openshift.MachineConfigMountDevice{}
+		dependencies.Get(machineConfigMountDevice)
+
+		if len(machineConfigMountDevice.Files()) == 0 {
+			logrus.Fatal(
+				"Unable to load machineconfig template to mount devices.",
+			)
+		}
+		templateFile := machineConfigMountDevice.Files()[0]
+
+		// Process InstallConfig: ControlPlane.MountDevices[]
+		for _, md := range installConfig.Config.ControlPlane.MountDevices {
+			config := machineMountDeviceTemplateData{
+				MachineRole:    "master",
+				DevicePath:     md.DevicePath,
+				MountPointPath: md.MountPath,
+				FileSystemType: "xfs",
+				ForceCreateFS:  false,
+			}
+			// transform the device path from '/dev/path/to/device' to 'dev-path-to-device'
+			deviceNameAlias := strings.TrimPrefix(strings.Replace(md.DevicePath, "/", "-", -1), "-")
+			mountPointAlias := strings.TrimPrefix(strings.Replace(md.MountPath, "/", "-", -1), "-")
+			switch md.MountPath {
+			case "/var/lib/etcd":
+				config.DeviceName = deviceNameAlias
+				config.MountPointName = mountPointAlias
+				config.ForceCreateFS = true
+				config.SyncOldData = true
+				config.SyncTestDirExists = md.MountPath + "/member"
+			case "/var/lib/containers":
+				config.DeviceName = deviceNameAlias
+				config.MountPointName = mountPointAlias
+				config.ForceCreateFS = true
+			default:
+				fmt.Printf("ERROR template to mount the mount path %s not found, leaving device %s unmounted.", md.MountPath, md.DevicePath)
+				continue
+			}
+			config.MachineConfigName = fmt.Sprintf("00-%s-mount-%s", config.MachineRole, config.MountPointName)
+			fileName := fmt.Sprintf("99_openshift-machineconfig_%s.yaml", config.MachineConfigName)
+			assetData[fileName] = applyTemplateData(templateFile.Data, config)
 		}
 	}
 

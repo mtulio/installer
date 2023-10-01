@@ -207,3 +207,8 @@ variable "virtualized_trusted_platform_module" {
   default = ""
   description = "Defines whether vTPM should be enabled on the virtual machine."
 }
+
+variable "data_disks" {
+  type        = list(map(string))
+  description = "Extra Data Disks."
+}

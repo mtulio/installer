@@ -33,9 +33,9 @@ type OSDisk struct {
 	DiskSizeGB int32 `json:"diskSizeGB"`
 	// DiskType defines the type of disk.
 	// For control plane nodes, the valid values are Premium_LRS and StandardSSD_LRS.
-	// Default is Premium_LRS.
+	// Default is PremiumV2_LRS.
 	// +optional
-	// +kubebuilder:validation:Enum=Standard_LRS;Premium_LRS;StandardSSD_LRS
+	// +kubebuilder:validation:Enum=Standard_LRS;Premium_LRS;PremiumV2_LRS;StandardSSD_LRS
 	DiskType string `json:"diskType"`
 	// DiskEncryptionSet defines a disk encryption set.
 	//

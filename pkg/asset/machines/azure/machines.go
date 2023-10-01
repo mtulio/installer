@@ -25,8 +25,12 @@ const (
 	cloudsSecretNamespace = "openshift-machine-api"
 )
 
+type MachineInput struct {
+	DataDisks []machineapi.DataDisk
+}
+
 // Machines returns a list of machines for a machinepool.
-func Machines(clusterID string, config *types.InstallConfig, pool *types.MachinePool, osImage, role, userDataSecret string, capabilities map[string]string, useImageGallery bool) ([]machineapi.Machine, *machinev1.ControlPlaneMachineSet, error) {
+func Machines(clusterID string, config *types.InstallConfig, pool *types.MachinePool, osImage, role, userDataSecret string, capabilities map[string]string, useImageGallery bool, in *MachineInput) ([]machineapi.Machine, *machinev1.ControlPlaneMachineSet, error) {
 	if configPlatform := config.Platform.Name(); configPlatform != azure.Name {
 		return nil, nil, fmt.Errorf("non-Azure configuration: %q", configPlatform)
 	}
@@ -54,7 +58,7 @@ func Machines(clusterID string, config *types.InstallConfig, pool *types.Machine
 		if len(azs) > 0 {
 			azIndex = int(idx) % len(azs)
 		}
-		provider, err := provider(platform, mpool, osImage, userDataSecret, clusterID, role, &azIndex, capabilities, useImageGallery)
+		provider, err := provider(platform, mpool, osImage, userDataSecret, clusterID, role, &azIndex, capabilities, useImageGallery, in)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to create provider")
 		}
@@ -151,7 +155,7 @@ func Machines(clusterID string, config *types.InstallConfig, pool *types.Machine
 	return machines, controlPlaneMachineSet, nil
 }
 
-func provider(platform *azure.Platform, mpool *azure.MachinePool, osImage string, userDataSecret string, clusterID string, role string, azIdx *int, capabilities map[string]string, useImageGallery bool) (*machineapi.AzureMachineProviderSpec, error) {
+func provider(platform *azure.Platform, mpool *azure.MachinePool, osImage string, userDataSecret string, clusterID string, role string, azIdx *int, capabilities map[string]string, useImageGallery bool, in *MachineInput) (*machineapi.AzureMachineProviderSpec, error) {
 	var az string
 	if len(mpool.Zones) > 0 && azIdx != nil {
 		az = mpool.Zones[*azIdx]
@@ -205,7 +209,7 @@ func provider(platform *azure.Platform, mpool *azure.MachinePool, osImage string
 	}
 
 	if mpool.OSDisk.DiskType == "" {
-		mpool.OSDisk.DiskType = "Premium_LRS"
+		mpool.OSDisk.DiskType = "PremiumV2_LRS"
 	}
 
 	publicLB := clusterID
@@ -261,6 +265,7 @@ func provider(platform *azure.Platform, mpool *azure.MachinePool, osImage string
 				SecurityProfile:    diskSecurityProfile,
 			},
 		},
+		DataDisks:             in.DataDisks,
 		SecurityProfile:       securityProfile,
 		UltraSSDCapability:    ultraSSDCapability,
 		Zone:                  az,

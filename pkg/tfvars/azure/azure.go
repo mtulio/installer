@@ -34,36 +34,37 @@ type OSImage struct {
 
 type config struct {
 	Auth                                    `json:",inline"`
-	Environment                             string            `json:"azure_environment"`
-	ARMEndpoint                             string            `json:"azure_arm_endpoint"`
-	ExtraTags                               map[string]string `json:"azure_extra_tags,omitempty"`
-	MasterInstanceType                      string            `json:"azure_master_vm_type,omitempty"`
-	MasterAvailabilityZones                 []string          `json:"azure_master_availability_zones"`
-	MasterEncryptionAtHostEnabled           bool              `json:"azure_master_encryption_at_host_enabled"`
-	MasterDiskEncryptionSetID               string            `json:"azure_master_disk_encryption_set_id,omitempty"`
-	ControlPlaneUltraSSDEnabled             bool              `json:"azure_control_plane_ultra_ssd_enabled"`
-	VolumeType                              string            `json:"azure_master_root_volume_type"`
-	VolumeSize                              int32             `json:"azure_master_root_volume_size"`
-	ImageURL                                string            `json:"azure_image_url,omitempty"`
-	ImageRelease                            string            `json:"azure_image_release,omitempty"`
-	Region                                  string            `json:"azure_region,omitempty"`
-	BaseDomainResourceGroupName             string            `json:"azure_base_domain_resource_group_name,omitempty"`
-	ResourceGroupName                       string            `json:"azure_resource_group_name"`
-	NetworkResourceGroupName                string            `json:"azure_network_resource_group_name"`
-	VirtualNetwork                          string            `json:"azure_virtual_network"`
-	ControlPlaneSubnet                      string            `json:"azure_control_plane_subnet"`
-	ComputeSubnet                           string            `json:"azure_compute_subnet"`
-	PreexistingNetwork                      bool              `json:"azure_preexisting_network"`
-	Private                                 bool              `json:"azure_private"`
-	OutboundType                            string            `json:"azure_outbound_routing_type"`
-	BootstrapIgnitionStub                   string            `json:"azure_bootstrap_ignition_stub"`
-	BootstrapIgnitionURLPlaceholder         string            `json:"azure_bootstrap_ignition_url_placeholder"`
-	HyperVGeneration                        string            `json:"azure_hypervgeneration_version"`
-	VMNetworkingType                        bool              `json:"azure_control_plane_vm_networking_type"`
-	RandomStringPrefix                      string            `json:"random_storage_account_suffix"`
-	VMArchitecture                          string            `json:"azure_vm_architecture"`
-	UseMarketplaceImage                     bool              `json:"azure_use_marketplace_image"`
-	MarketplaceImageHasPlan                 bool              `json:"azure_marketplace_image_has_plan"`
+	Environment                             string              `json:"azure_environment"`
+	ARMEndpoint                             string              `json:"azure_arm_endpoint"`
+	ExtraTags                               map[string]string   `json:"azure_extra_tags,omitempty"`
+	MasterInstanceType                      string              `json:"azure_master_vm_type,omitempty"`
+	MasterAvailabilityZones                 []string            `json:"azure_master_availability_zones"`
+	MasterEncryptionAtHostEnabled           bool                `json:"azure_master_encryption_at_host_enabled"`
+	MasterDiskEncryptionSetID               string              `json:"azure_master_disk_encryption_set_id,omitempty"`
+	ControlPlaneUltraSSDEnabled             bool                `json:"azure_control_plane_ultra_ssd_enabled"`
+	VolumeType                              string              `json:"azure_master_root_volume_type"`
+	VolumeSize                              int32               `json:"azure_master_root_volume_size"`
+	ControlPlaneDataDisks                   []map[string]string `json:"azure_controlplane_data_disks"`
+	ImageURL                                string              `json:"azure_image_url,omitempty"`
+	ImageRelease                            string              `json:"azure_image_release,omitempty"`
+	Region                                  string              `json:"azure_region,omitempty"`
+	BaseDomainResourceGroupName             string              `json:"azure_base_domain_resource_group_name,omitempty"`
+	ResourceGroupName                       string              `json:"azure_resource_group_name"`
+	NetworkResourceGroupName                string              `json:"azure_network_resource_group_name"`
+	VirtualNetwork                          string              `json:"azure_virtual_network"`
+	ControlPlaneSubnet                      string              `json:"azure_control_plane_subnet"`
+	ComputeSubnet                           string              `json:"azure_compute_subnet"`
+	PreexistingNetwork                      bool                `json:"azure_preexisting_network"`
+	Private                                 bool                `json:"azure_private"`
+	OutboundType                            string              `json:"azure_outbound_routing_type"`
+	BootstrapIgnitionStub                   string              `json:"azure_bootstrap_ignition_stub"`
+	BootstrapIgnitionURLPlaceholder         string              `json:"azure_bootstrap_ignition_url_placeholder"`
+	HyperVGeneration                        string              `json:"azure_hypervgeneration_version"`
+	VMNetworkingType                        bool                `json:"azure_control_plane_vm_networking_type"`
+	RandomStringPrefix                      string              `json:"random_storage_account_suffix"`
+	VMArchitecture                          string              `json:"azure_vm_architecture"`
+	UseMarketplaceImage                     bool                `json:"azure_use_marketplace_image"`
+	MarketplaceImageHasPlan                 bool                `json:"azure_marketplace_image_has_plan"`
 	OSImage                                 `json:",inline"`
 	SecurityEncryptionType                  string `json:"azure_master_security_encryption_type,omitempty"`
 	SecureVirtualMachineDiskEncryptionSetID string `json:"azure_master_secure_vm_disk_encryption_set_id,omitempty"`
@@ -150,6 +151,18 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		Version:   masterConfig.Image.Version,
 	}
 
+	// Master Data Disks
+	cpDataDisks := []map[string]string{}
+	for _, dd := range masterConfig.DataDisks {
+		cpDataDisks = append(cpDataDisks, map[string]string{
+			"name":                 dd.NameSuffix,
+			"storage_account_type": string(dd.ManagedDisk.StorageAccountType),
+			"disk_size_gb":         fmt.Sprintf("%d", dd.DiskSizeGB),
+			"lun":                  fmt.Sprintf("%d", dd.Lun),
+		})
+	}
+	fmt.Printf("tfmap %v\n", cpDataDisks)
+
 	cfg := &config{
 		Auth:                                    sources.Auth,
 		Environment:                             environment,
@@ -162,6 +175,7 @@ func TFVars(sources TFVarsSources) ([]byte, error) {
 		ControlPlaneUltraSSDEnabled:             masterConfig.UltraSSDCapability == machineapi.AzureUltraSSDCapabilityEnabled,
 		VolumeType:                              masterConfig.OSDisk.ManagedDisk.StorageAccountType,
 		VolumeSize:                              masterConfig.OSDisk.DiskSizeGB,
+		ControlPlaneDataDisks:                   cpDataDisks,
 		ImageURL:                                sources.ImageURL,
 		ImageRelease:                            sources.ImageRelease,
 		Private:                                 sources.Publish == types.InternalPublishingStrategy,

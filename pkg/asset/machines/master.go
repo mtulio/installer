@@ -343,7 +343,7 @@ func (m *Master) Generate(dependencies asset.Parents) error {
 			installConfig.Config.Platform.Azure.Region,
 			installConfig.Config.ControlPlane.Architecture,
 		)
-		mpool.OSDisk.DiskSizeGB = 1024
+		mpool.OSDisk.DiskSizeGB = 128
 		if installConfig.Config.Platform.Azure.CloudName == azuretypes.StackCloud {
 			mpool.OSDisk.DiskSizeGB = azuredefaults.AzurestackMinimumDiskSize
 		}
@@ -381,14 +381,46 @@ func (m *Master) Generate(dependencies asset.Parents) error {
 				mpool.OSImage.Publisher = *img.Plan.Publisher
 			}
 		}
+
 		pool.Platform.Azure = &mpool
+
+		// TODO: check the best place to validate/enforce mount point
+		// it is not working (pool is not saved)
+		etcdDataDiskDefined := false
+		etcdMountPointDefined := false
+		etcdDataDiskLunID := int32(0)
+		etcdMountPointPath := "/var/lib/etcd"
+		for _, md := range pool.MountDevices {
+			if md.MountPath == etcdMountPointPath {
+				etcdMountPointDefined = true
+			}
+		}
+		for _, dd := range mpool.DataDisks {
+			if dd.NameSuffix == "etcd" {
+				etcdDataDiskDefined = true
+				etcdDataDiskLunID = dd.Lun
+			}
+		}
+		// etcd Data Disk was defined and not the Mount point
+		if etcdDataDiskDefined && !etcdMountPointDefined {
+			ic.ControlPlane.MountDevices = append(ic.ControlPlane.MountDevices, &types.MachineDevice{
+				Name:       "etcd",
+				MountPath:  etcdMountPointPath,
+				DevicePath: fmt.Sprintf("/dev/disk/azure/scsi1/lun%d", etcdDataDiskLunID),
+			})
+		}
 
 		capabilities, err := client.GetVMCapabilities(context.TODO(), mpool.InstanceType, installConfig.Config.Platform.Azure.Region)
 		if err != nil {
 			return err
 		}
 		useImageGallery := installConfig.Azure.CloudName != azuretypes.StackCloud
-		machines, controlPlaneMachineSet, err = azure.Machines(clusterID.InfraID, ic, &pool, string(*rhcosImage), "master", masterUserDataSecretName, capabilities, useImageGallery)
+
+		machineIn := &azure.MachineInput{
+			DataDisks: mpool.DataDisks,
+		}
+
+		machines, controlPlaneMachineSet, err = azure.Machines(clusterID.InfraID, ic, &pool, string(*rhcosImage), "master", masterUserDataSecretName, capabilities, useImageGallery, machineIn)
 		if err != nil {
 			return errors.Wrap(err, "failed to create master machine objects")
 		}

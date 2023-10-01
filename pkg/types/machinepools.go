@@ -50,6 +50,19 @@ const (
 	ArchitectureARM64 = "arm64"
 )
 
+// MachineDevice is map to create a configuration to mount devices.
+type MachineDevice struct {
+	// Name is the name of the machine pool.
+	// Example: var-lib-etcd
+	Name string `json:"name"`
+	// DevicePath is the path in the file system to the device.
+	// Example: /dev/disk/azure/scsi1/lun0
+	DevicePath string `json:"devicePath"`
+	// DevicePath is the path in the file system to mount the device.
+	// Example /var/lib/etcd
+	MountPath string `json:"mountPath"`
+}
+
 // MachinePool is a pool of machines to be installed.
 type MachinePool struct {
 	// Name is the name of the machine pool.
@@ -77,6 +90,12 @@ type MachinePool struct {
 	// +kubebuilder:default=amd64
 	// +optional
 	Architecture Architecture `json:"architecture,omitempty"`
+
+	// MountDevices is the instruction to mount additional devices.
+	// Defaults to empty.
+	//
+	// +optional
+	MountDevices []*MachineDevice `json:"mountDevices,omitempty"`
 }
 
 // MachinePoolPlatform is the platform-specific configuration for a machine

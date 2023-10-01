@@ -9,12 +9,11 @@ import (
 
 // ControlPlaneInstanceType sets the defaults for control plane instances.
 // Minimum requirements are 4 CPU's, 16GiB of ram, and 120GiB storage.
-// D8s_v3 gives us 8 CPU's, 32GiB ram and 64GiB of temporary storage
-// This extra bump is done to prevent etcd from overloading
+// D4ds_v5 gives us 4 CPU's, 16GiB ram and 150GiB of temporary storage.
 // DS4_v2 gives us 8 CPUs, 28GiB ram, and 56GiB of temporary storage.
 func ControlPlaneInstanceType(cloud azure.CloudEnvironment, region string, arch types.Architecture) string {
 	instanceClass := getInstanceClass(region)
-	size := "D8s_v3"
+	size := "D4s_v5"
 	if arch == types.ArchitectureARM64 {
 		size = "D8ps_v5"
 	}
