@@ -116,6 +116,15 @@ Resources:
         AliasTarget:
           HostedZoneId: !GetAtt ExtApiElb.CanonicalHostedZoneID
           DNSName: !GetAtt ExtApiElb.DNSName
+      - Name:
+          !Join [
+            ".",
+            ["*.apps", !Ref ClusterName, !Join ["", [!Ref HostedZoneName, "."]]],
+          ]
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt ExtApiElb.CanonicalHostedZoneID
+          DNSName: !GetAtt ExtApiElb.DNSName
 
   InternalApiServerRecord:
     Type: AWS::Route53::RecordSetGroup
@@ -141,6 +150,15 @@ Resources:
         AliasTarget:
           HostedZoneId: !GetAtt IntApiElb.CanonicalHostedZoneID
           DNSName: !GetAtt IntApiElb.DNSName
+      - Name:
+          !Join [
+            ".",
+            ["*.apps", !Ref ClusterName, !Join ["", [!Ref HostedZoneName, "."]]],
+          ]
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt IntApiElb.CanonicalHostedZoneID
+          DNSName: !GetAtt ExtApiElb.DNSName
 
   ExternalApiListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -232,6 +250,66 @@ Resources:
       - Key: deregistration_delay.timeout_seconds
         Value: 60
 
+  ## Ingress 80
+  IngressHTTPListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: IngressHTTPTargetGroup
+        LoadBalancerArn:
+          Ref: ExtApiElb
+        Port: 80
+        Protocol: TCP
+
+  IngressHTTPTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 80
+      HealthCheckProtocol: TCP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Port: 80
+      Protocol: TCP
+      TargetType: ip
+      VpcId:
+        Ref: VpcId
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60
+
+  ## Ingress 443
+  IngressHTTPSListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: IngressHTTPSTargetGroup
+        LoadBalancerArn:
+          Ref: ExtApiElb
+        Port: 443
+        Protocol: TCP
+
+  IngressHTTPSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 443
+      HealthCheckProtocol: TCP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Port: 443
+      Protocol: TCP
+      TargetType: ip
+      VpcId:
+        Ref: VpcId
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 60
+
   RegisterTargetLambdaIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -272,6 +350,20 @@ Resources:
                 "elasticloadbalancing:DeregisterTargets",
               ]
             Resource: !Ref ExternalApiTargetGroup
+          - Effect: "Allow"
+            Action:
+              [
+                "elasticloadbalancing:RegisterTargets",
+                "elasticloadbalancing:DeregisterTargets",
+              ]
+            Resource: !Ref IngressHTTPTargetGroup
+          - Effect: "Allow"
+            Action:
+              [
+                "elasticloadbalancing:RegisterTargets",
+                "elasticloadbalancing:DeregisterTargets",
+              ]
+            Resource: !Ref IngressHTTPSTargetGroup
 
   RegisterNlbIpTargets:
     Type: "AWS::Lambda::Function"
@@ -384,7 +476,7 @@ Outputs:
   ApiServerDnsName:
     Description: Full hostname of the API server, which is required for the Ignition config files.
     Value: !Join [".", ["api-int", !Ref ClusterName, !Ref HostedZoneName]]
-  RegisterNlbIpTargetsLambda:
+  RegisterNlbIpTargetsLambdaArn:
     Description: Lambda ARN useful to help register or deregister IP targets for these load balancers.
     Value: !GetAtt RegisterNlbIpTargets.Arn
   ExternalApiTargetGroupArn:
@@ -396,3 +488,9 @@ Outputs:
   InternalServiceTargetGroupArn:
     Description: ARN of the internal service target group.
     Value: !Ref InternalServiceTargetGroup
+  IngressHTTPTargetGroupArn:
+    Description: ARN of the Ingress HTTP target group.
+    Value: !Ref IngressHTTPTargetGroup
+  IngressHTTPSTargetGroupArn:
+    Description: ARN of the Ingress HTTPS target group.
+    Value: !Ref IngressHTTPSTargetGroup

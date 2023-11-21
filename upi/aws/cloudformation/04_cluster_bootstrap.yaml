@@ -156,6 +156,9 @@ Resources:
         FromPort: 19531
         CidrIp: 0.0.0.0/0
       VpcId: !Ref VpcId
+      Tags:
+      - Key: "Name"
+        Value: !Join ["-", [!Ref InfrastructureName, "bootstrap"]]
 
   BootstrapInstance:
     Type: AWS::EC2::Instance
@@ -176,6 +179,11 @@ Resources:
         - {
           S3Loc: !Ref BootstrapIgnitionLocation
         }
+      Tags:
+      - Key: !Join ["", ["kubernetes.io/cluster/", !Ref InfrastructureName]]
+        Value: "shared"
+      - Key: "Name"
+        Value: !Join ["-", [!Ref InfrastructureName, "bootstrap"]]
 
   RegisterBootstrapApiTarget:
     Condition: DoRegistration

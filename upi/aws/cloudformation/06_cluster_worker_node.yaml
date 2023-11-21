@@ -32,6 +32,26 @@ Parameters:
   WorkerInstanceType:
     Default: m5.large
     Type: String
+  NodeID:
+    Default: "worker-00"
+    Type: String
+    AllowedPattern: ^([a-zA-Z][a-zA-Z0-9\-]{0,26})$
+  RegisterNlbIpTargetsLambdaArn:
+    Description: ARN for NLB IP target registration lambda. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Type: String
+  IngressHTTPTargetGroupArn:
+    Description: ARN for external API load balancer target group. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Type: String
+  IngressHTTPSTargetGroupArn:
+    Description: ARN for external API load balancer target group. Supply the value from the cluster infrastructure or select "no" for AutoRegisterELB.
+    Type: String
+  AutoRegisterELB:
+    Default: "yes"
+    AllowedValues:
+    - "yes"
+    - "no"
+    Description: Do you want to invoke NLB registration, which requires a Lambda ARN parameter?
+    Type: String
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -43,6 +63,7 @@ Metadata:
     - Label:
         default: "Host Information"
       Parameters:
+      - AutoRegisterELB
       - WorkerInstanceType
       - RhcosAmi
       - IgnitionLocation
@@ -71,8 +92,12 @@ Metadata:
       WorkerSecurityGroupId:
         default: "Worker Security Group ID"
 
+Conditions:
+  DoRegistration: !Equals ["yes", !Ref AutoRegisterELB]
+
+
 Resources:
-  Worker0:
+  Worker:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref RhcosAmi
@@ -99,8 +124,25 @@ Resources:
       Tags:
       - Key: !Join ["", ["kubernetes.io/cluster/", !Ref InfrastructureName]]
         Value: "shared"
+      - Key: "Name"
+        Value: !Join ["-", [!Ref InfrastructureName, !Ref NodeID]]
+
+  RegisterWorkerIngressHTTP:
+    Condition: DoRegistration
+    Type: Custom::NLBRegister
+    Properties:
+      ServiceToken: !Ref RegisterNlbIpTargetsLambdaArn
+      TargetArn: !Ref IngressHTTPTargetGroupArn
+      TargetIp: !GetAtt Worker.PrivateIp
+  RegisterWorkerIngressHTTPS:
+    Condition: DoRegistration
+    Type: Custom::NLBRegister
+    Properties:
+      ServiceToken: !Ref RegisterNlbIpTargetsLambdaArn
+      TargetArn: !Ref IngressHTTPSTargetGroupArn
+      TargetIp: !GetAtt Worker.PrivateIp
 
 Outputs:
   PrivateIP:
     Description: The compute node private IP address.
-    Value: !GetAtt Worker0.PrivateIp
+    Value: !GetAtt Worker.PrivateIp
