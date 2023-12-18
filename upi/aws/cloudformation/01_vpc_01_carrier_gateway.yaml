@@ -10,7 +10,7 @@ Parameters:
   ClusterName:
     Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
     Type: String
-    AllowedPattern: ".+"
+    AllowedPattern: ^([a-zA-Z][a-zA-Z0-9\-]{0,26})$
     ConstraintDescription: ClusterName parameter must be specified.
 
 Resources:

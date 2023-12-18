@@ -7,36 +7,25 @@ Parameters:
     Type: String
     AllowedPattern: ^(?:(?:vpc)(?:-[a-zA-Z0-9]+)?\b|(?:[0-9]{1,3}\.){3}[0-9]{1,3})$
     ConstraintDescription: VPC ID must be with valid name, starting with vpc-.*.
-  ClusterName:
+  NamePrefix:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    AllowedPattern: ".+"
+    ConstraintDescription: ClusterName parameter must be specified.
+  NameSuffix:
     Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
     Type: String
     AllowedPattern: ".+"
     ConstraintDescription: ClusterName parameter must be specified.
 
 Resources:
-  CarrierGateway:
-    Type: "AWS::EC2::CarrierGateway"
-    Properties:
-      VpcId: !Ref VpcId
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref ClusterName, "cagw"]]
-
-  PublicRouteTable:
+  RouteTable:
     Type: "AWS::EC2::RouteTable"
     Properties:
       VpcId: !Ref VpcId
       Tags:
       - Key: Name
-        Value: !Join ['-', [!Ref ClusterName, "public-carrier"]]
-
-  PublicRoute:
-    Type: "AWS::EC2::Route"
-    DependsOn: CarrierGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      CarrierGatewayId: !Ref CarrierGateway
+        Value: !Join ['-', [!Ref ClusterName, !Ref NameSuffix]]
 
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -51,7 +40,7 @@ Resources:
           Resource:
           - '*'
       RouteTableIds:
-      - !Ref PublicRouteTable
+      - !Ref RouteTable
       ServiceName: !Join
       - ''
       - - com.amazonaws.
@@ -60,6 +49,6 @@ Resources:
       VpcId: !Ref VpcId
 
 Outputs:
-  PublicRouteTableId:
-    Description: Public Route table ID
-    Value: !Ref PublicRouteTable
+  RouteTableId:
+    Description: Route table ID
+    Value: !Ref RouteTable

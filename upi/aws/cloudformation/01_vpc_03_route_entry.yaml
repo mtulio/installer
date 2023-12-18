@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template for Best Practice VPC with 1-3 AZs
+
+Parameters:
+  RouteTableId:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    AllowedPattern: ".+"
+    ConstraintDescription: ClusterName parameter must be specified.
+  DestinationCidrBlock:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    AllowedPattern: ".+"
+    ConstraintDescription: ClusterName parameter must be specified.
+  GatewayId:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    ConstraintDescription: ClusterName parameter must be specified.
+    Default: ""
+  NatGatewayId:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    ConstraintDescription: ClusterName parameter must be specified.
+    Default: ""
+  TransitGatewayId:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    ConstraintDescription: ClusterName parameter must be specified.
+    Default: ""
+
+Resources:
+  Route:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref RouteTableId
+      DestinationCidrBlock: !Ref DestinationCidrBlock
+      GatewayId: !Ref GatewayId
+      NatGatewayId: !Ref NatGatewayId
+      TransitGatewayId:  !Ref TransitGatewayId
