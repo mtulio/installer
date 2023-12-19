@@ -12,18 +12,32 @@ Parameters:
     Type: String
     AllowedPattern: ".+"
     ConstraintDescription: ClusterName parameter must be specified.
+  TransitGatewayId:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    Type: String
+    AllowedPattern: ".+"
+    ConstraintDescription: ClusterName parameter must be specified.
+  # TODO support more than one subnet
+  SubnetIds:
+    Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
+    #Type: "List<AWS::EC2::Subnet::Id>"
+    Type: String
+    #AllowedPattern: ".+"
+    #ConstraintDescription: ClusterName parameter must be specified.
 
 Resources:
   Gateway:
     Type: "AWS::EC2::TransitGatewayAttachment"
     Properties:
-      Options: !Ref Options
-      SubnetIds: !Ref SubnetIds
-      TransitGatewayId: !Ref TransitGatewayId
+      Options:
+        DnsSupport: enable
+      SubnetIds:
+        - !Ref 'SubnetIds'
+      TransitGatewayId: !Ref 'TransitGatewayId'
       VpcId: !Ref VpcId
       Tags:
       - Key: Name
-        Value: !Join ['-', [!Ref NamePrefix, "tgwa", !Ref TransitGatewayId]]
+        Value: !Join ['-', [!Ref NamePrefix, "tgwa"]]
 
 Outputs:
   TransitGatewayAttachmentId:

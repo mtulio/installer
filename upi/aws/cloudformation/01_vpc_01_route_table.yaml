@@ -25,7 +25,7 @@ Resources:
       VpcId: !Ref VpcId
       Tags:
       - Key: Name
-        Value: !Join ['-', [!Ref ClusterName, !Ref NameSuffix]]
+        Value: !Join ['-', [!Ref NamePrefix, !Ref NameSuffix]]
 
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
