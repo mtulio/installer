@@ -32,6 +32,22 @@ locals {
   new_public_cidr_range       = local.edge_enabled == 0 ? cidrsubnet(local.cidr_dedicated_public, local.allow_expansion_zones, 0) : cidrsubnet(local.cidr_shared_public, local.allow_expansion_zones, 0)
   new_edge_private_cidr_range = local.allow_expansion_edge == 0 ? local.cidr_edge_private : cidrsubnet(local.cidr_edge_private, local.allow_expansion_edge, 0)
   new_edge_public_cidr_range  = local.allow_expansion_edge == 0 ? local.cidr_edge_public : cidrsubnet(local.cidr_edge_public, local.allow_expansion_edge, 0)
+
+  # Transit Gateway evaluation
+  # Case [1] Deploy VPC && TGW
+  # Case [2] Deploy VPC && No TGW
+  # Case [3] BYO VPC && TGW
+  # Case [4] BYO VPC && No TGW
+  # [1] true && true = true
+  # [2] true && false = false
+  # [3] false && true = false
+  # [4] false && false = false
+  has_transit_gw = var.private_subnets == null && var.private_egress_tgw != ""
+  # [1] true && not(true) = false
+  # [2] true && not(false) = true
+  # [3] false && not(false) = false
+  # [4] false && not(false) = false
+  has_nat_gw = var.private_subnets == null && !local.has_transit_gw
 }
 
 # all data sources should be input variable-agnostic and used as canonical source for querying "state of resources" and building outputs

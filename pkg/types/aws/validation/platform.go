@@ -58,6 +58,12 @@ func ValidatePlatform(p *aws.Platform, cm types.CredentialsMode, fldPath *field.
 		allErrs = append(allErrs, ValidateMachinePool(p, p.DefaultMachinePlatform, fldPath.Child("defaultMachinePlatform"))...)
 	}
 
+	if p.PrivateEgressTransitGatewayId != "" {
+		if len(p.Subnets) > 0 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("privateEgressTransitGatewayId"), p.PrivateEgressTransitGatewayId, "may not use an existing Transit Gateway when using existing subnets"))
+		}
+	}
+
 	return allErrs
 }
 

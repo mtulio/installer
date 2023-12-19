@@ -2426,6 +2426,11 @@ spec:
                       can be used to make the S3 deletion optional during bootstrap
                       destroy.
                     type: boolean
+                  privateEgressTransitGatewayId:
+                    description: PrivateEgressTransitGatewayId is an optional field
+                      that can be used to make the a Transit Gateway the default egress
+                      route for private subnets.
+                    type: string
                   propagateUserTags:
                     description: PropagateUserTags is a flag that directs in-cluster
                       operators to include the specified user tags in the tags of

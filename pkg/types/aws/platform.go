@@ -106,6 +106,12 @@ type Platform struct {
 	// during bootstrap destroy.
 	// +optional
 	PreserveBootstrapIgnition bool `json:"preserveBootstrapIgnition,omitempty"`
+
+	// PrivateEgressTransitGatewayId is an optional field that can be used to make the a Transit Gateway
+	// the default egress route for private subnets.
+	//
+	// +optional
+	PrivateEgressTransitGatewayId string `json:"privateEgressTransitGatewayId,omitempty"`
 }
 
 // ServiceEndpoint store the configuration for services to

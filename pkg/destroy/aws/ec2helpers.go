@@ -145,6 +145,8 @@ func deleteEC2(ctx context.Context, session *session.Session, arn arn.ARN, logge
 		return deleteEC2InternetGateway(ctx, client, id, logger)
 	case "carrier-gateway":
 		return deleteEC2CarrierGateway(ctx, client, id, logger)
+	case "transit-gateway-attachment":
+		return deleteEC2TransitGatewayAttachment(ctx, client, id, logger)
 	case "natgateway":
 		return deleteEC2NATGateway(ctx, client, id, logger)
 	case "placement-group":
@@ -343,6 +345,22 @@ func deleteEC2CarrierGateway(ctx context.Context, client *ec2.EC2, id string, lo
 	if err != nil {
 		var awsErr awserr.Error
 		if errors.As(err, &awsErr) && awsErr.Code() == "InvalidCarrierGatewayID.NotFound" {
+			return nil
+		}
+		return err
+	}
+
+	logger.Info("Deleted")
+	return nil
+}
+
+func deleteEC2TransitGatewayAttachment(ctx context.Context, client *ec2.EC2, id string, logger logrus.FieldLogger) error {
+	_, err := client.DeleteTransitGatewayVpcAttachment(&ec2.DeleteTransitGatewayVpcAttachmentInput{
+		TransitGatewayAttachmentId: &id,
+	})
+	if err != nil {
+		var awsErr awserr.Error
+		if errors.As(err, &awsErr) && awsErr.Code() == "InvalidTransitGatewayVpcAttachmentID.NotFound" {
 			return nil
 		}
 		return err

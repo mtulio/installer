@@ -60,3 +60,8 @@ variable "private_subnets" {
   type        = list(string)
   description = "Existing private subnets into which the cluster should be installed."
 }
+
+variable "private_egress_tgw" {
+  type        = string
+  description = "Transit Gateway ID to be used as default route for private subnets."
+}

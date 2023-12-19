@@ -92,7 +92,7 @@ resource "aws_route_table_association" "edge_public_routing" {
 }
 
 resource "aws_eip" "nat_eip" {
-  count = var.public_subnets == null ? length(var.availability_zones) : 0
+  count = local.has_nat_gw && var.public_subnets == null ? length(var.availability_zones) : 0
   vpc   = true
 
   tags = merge(
@@ -109,7 +109,7 @@ resource "aws_eip" "nat_eip" {
 }
 
 resource "aws_nat_gateway" "nat_gw" {
-  count = var.public_subnets == null ? length(var.availability_zones) : 0
+  count = local.has_nat_gw && var.public_subnets == null ? length(var.availability_zones) : 0
 
   allocation_id = aws_eip.nat_eip[count.index].id
   subnet_id     = aws_subnet.public_subnet[count.index].id
