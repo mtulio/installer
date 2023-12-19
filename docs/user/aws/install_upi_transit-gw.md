@@ -3,6 +3,54 @@
 Create a Hub-Spoke deployment to use centralized egress-gateway to
 deploy OpenShift cluster.
 
+> WIP
+
+```mermaid
+graph LR
+  role<-.->config
+  stsservice<-- AssumeRoleWithWebIdentity/JWT -.->Pod
+  Pod-- Creds Assumed Role -->serviceapi
+  subgraph cluster [AWS CI Account]
+    CloudFront[CloudFront Distribution];
+    S3Bucket[S3 Bucket w/ OIDC Config];
+    iam_idp-- Public URL -->S3Bucket;
+    iam_idp-- Public URL -->CloudFront;
+    CloudFront-- Private access -->S3Bucket;
+    stsservice -- Trust Tokens<br>Signed -->iam_idp;
+    role<-->stsservice;
+    subgraph Hub_VPC_(Transit);
+      role[IAM Role For Pod];
+      iam_idp[IAM Identity Provider/OIDC];
+    end
+    subgraph AWS_API;
+      stsservice[AWS STS API];
+      serviceapi[AWS Service API/EC2,S3...];
+    end
+  end
+  subgraph cluster2 [CI Jobs on AWS]
+    sa([ServiceAccount Signing Keys]) -- Public <br> Key -->KAS_HTTP;
+    sa([ServiceAccount Signing Keys]) -- Private <br> Key -->token_signing;
+    sa
+    token_signing[Token Signing]-->projected[Projected<br>ServiceAccount<br>Token];
+    subgraph KAS;
+      KAS_HTTP
+      KAS_OIDC[OIDC configs/JWKS]
+      KAS_HTTP -- /.well-known/openid-configuration -->KAS_OIDC
+      KAS_HTTP -- /openid/v1/jwks -->KAS_OIDC
+    end
+    subgraph Pod
+    config[AWS Config File]-->projected
+  end
+  end
+  classDef plain fill:#ddd,stroke:#fff,stroke-width:4px,color:#000;
+  classDef k8s fill:#326ce5,stroke:#fff,stroke-width:4px,color:#fff;
+  classDef cluster fill:#fff,stroke:#bbb,stroke-width:2px,color:#326ce5;
+  classDef cluster2 fill:#fff,stroke:#bbb,stroke-width:2px,color:#326ce5;
+  class config,role,stsservice,serviceapi,projected,token_signing,iam_idp,pod1,pod2,S3Bucket,CloudFront,KAS_HTTP,KAS_OIDC k8s;
+  class sa plain;
+  class cluster cluster;
+  class cluster2 cluster1;
+```
 
 ## Prerequisites
 
@@ -32,6 +80,7 @@ aws cloudformation create-stack \
 aws cloudformation wait stack-create-complete \
     --region ${AWS_REGION} \
     --stack-name ${RESOURCE_NAME_PREFIX}-tgw &&\
+
 export TGW_ID=$(aws cloudformation describe-stacks \
   --region ${AWS_REGION} --stack-name ${RESOURCE_NAME_PREFIX}-tgw \
   --query 'Stacks[0].Outputs[?OutputKey==`TransitGatewayId`].OutputValue' \
@@ -106,7 +155,9 @@ aws cloudformation execute-change-set \
 - Wait
 
 ```sh
-
+aws cloudformation wait stack-create-complete \
+    --region ${AWS_REGION} \
+    --stack-name "transit-network-hub"
 ```
 
 - Create static route for default route entry in TGW Rtb
@@ -123,13 +174,10 @@ aws ec2 create-transit-gateway-route \
 --transit-gateway-attachment-id "${TGW_ATT_HUB}"
 ```
 
-- Delete
+### Delete stack (optional)
 
 ```sh
-aws cloudformation delete-stack          --stack-name "transit-network-hub"
-
-aws cloudformation delete-change-set     --change-set-name "transit-network-hub"     --stack-name "transit-network-hub" &&\
-aws cloudformation delete-stack          --stack-name "transit-network-hub"
+aws cloudformation delete-stack --stack-name "transit-network-hub"
 ```
 
 ## Create Cluster #1 VPC (spoke)
@@ -219,7 +267,21 @@ EOF
 openshift-install create cluster --dir ${INSTALL_DIR} --log-level=debug
 ```
 
-### Destroy
+- Review installation
+
+```sh
+export KUBECONFIG=${INSTALL_DIR}/auth/kubeconfig
+oc get nodes
+```
+
+```text
+$ oc get clusterversion
+NAME      VERSION       AVAILABLE   PROGRESSING   SINCE   STATUS
+version   4.15.0-rc.0   True        False         2m30s   Cluster version is 4.15.0-rc.0
+```
+
+
+### Destroy (optional)
 
 - Destroy cluster
 
