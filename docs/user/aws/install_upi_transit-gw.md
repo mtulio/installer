@@ -3,6 +3,7 @@
 Create a Hub-Spoke deployment to use centralized egress-gateway to
 deploy OpenShift cluster.
 
+
 ## Prerequisites
 
 ```sh
@@ -146,7 +147,7 @@ Deploy:
 - Export variables:
 
 ```sh
-CLUSTER_NAME=c1
+CLUSTER_NAME=c4
 CLUSTER_VPC_CIDR=10.10.0.0/16
 ```
 

@@ -131,12 +131,16 @@ Resources:
  
   TransitGatewayAttachment:
     Type: AWS::CloudFormation::Stack
+    DependsOn:
+    - Subnets1a
+    - Subnets1b
+    - Subnets1c
     Properties:
       TemplateURL: !Join ['/', [!Ref TemplatesBaseURL, "01_vpc_01_transit_gateway_attachment.yaml"]]
       TimeoutInMinutes: 5
       Parameters:
         NamePrefix: !Ref NamePrefix
-        SubnetIds: !GetAtt 'Subnets1a.Outputs.PrivateSubnetId'
+        SubnetIds: !Join [', ', [!GetAtt 'Subnets1a.Outputs.PrivateSubnetId', !GetAtt 'Subnets1b.Outputs.PrivateSubnetId', !GetAtt 'Subnets1c.Outputs.PrivateSubnetId']]
         # TODO support more than one subnet
         #  - !GetAtt 'Subnets1a.Outputs.PrivateSubnetId'
         #  - !GetAtt 'Subnets1b.Outputs.PrivateSubnetId'

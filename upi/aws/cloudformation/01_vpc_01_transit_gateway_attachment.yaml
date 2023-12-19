@@ -21,7 +21,7 @@ Parameters:
   SubnetIds:
     Description: Cluster Name or Prefix name to prepend the tag Name for each subnet.
     #Type: "List<AWS::EC2::Subnet::Id>"
-    Type: String
+    Type: CommaDelimitedList
     #AllowedPattern: ".+"
     #ConstraintDescription: ClusterName parameter must be specified.
 
@@ -31,8 +31,7 @@ Resources:
     Properties:
       Options:
         DnsSupport: enable
-      SubnetIds:
-        - !Ref 'SubnetIds'
+      SubnetIds: !Ref 'SubnetIds'
       TransitGatewayId: !Ref 'TransitGatewayId'
       VpcId: !Ref VpcId
       Tags:

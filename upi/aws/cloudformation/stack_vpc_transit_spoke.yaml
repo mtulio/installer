@@ -117,7 +117,7 @@ Resources:
       TimeoutInMinutes: 5
       Parameters:
         NamePrefix: !Ref NamePrefix
-        SubnetIds: !GetAtt 'Subnets1a.Outputs.PrivateSubnetId'
+        SubnetIds: !Join [', ', [!GetAtt 'Subnets1a.Outputs.PrivateSubnetId', !GetAtt 'Subnets1b.Outputs.PrivateSubnetId', !GetAtt 'Subnets1c.Outputs.PrivateSubnetId']]
         # TODO support more than one subnet
         #  - !GetAtt 'Subnets1a.Outputs.PrivateSubnetId'
         #  - !GetAtt 'Subnets1b.Outputs.PrivateSubnetId'
