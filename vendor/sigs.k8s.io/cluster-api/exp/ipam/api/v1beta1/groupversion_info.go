@@ -36,6 +36,12 @@ var (
 	AddToScheme = schemeBuilder.AddToScheme
 
 	objectTypes = []runtime.Object{}
+<<<<<<<< HEAD:vendor/sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1/groupversion_info.go
+========
+
+	// localSchemeBuilder is used for type conversions.
+	localSchemeBuilder = schemeBuilder
+>>>>>>>> 554602fe33 (vendor capa dual lb):vendor/sigs.k8s.io/cluster-api/exp/ipam/api/v1alpha1/groupversion_info.go
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
