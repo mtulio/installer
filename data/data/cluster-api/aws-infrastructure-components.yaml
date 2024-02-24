@@ -15812,6 +15812,28 @@ webhooks:
     service:
       name: capa-webhook-service
       namespace: capa-system
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-rosamachinepool
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.rosamachinepool.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rosamachinepools
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: capa-webhook-service
+      namespace: capa-system
       path: /mutate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfig
   failurePolicy: Fail
   matchPolicy: Equivalent
@@ -15870,6 +15892,28 @@ webhooks:
     - UPDATE
     resources:
     - awsmanagedcontrolplanes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: capa-webhook-service
+      namespace: capa-system
+      path: /mutate-controlplane-cluster-x-k8s-io-v1beta2-rosacontrolplane
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.rosacontrolplanes.controlplane.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - controlplane.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rosacontrolplanes
   sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -16108,6 +16152,28 @@ webhooks:
     service:
       name: capa-webhook-service
       namespace: capa-system
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-rosamachinepool
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.rosamachinepool.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rosamachinepools
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: capa-webhook-service
+      namespace: capa-system
       path: /validate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfig
   failurePolicy: Fail
   matchPolicy: Equivalent
@@ -16166,4 +16232,26 @@ webhooks:
     - UPDATE
     resources:
     - awsmanagedcontrolplanes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: capa-webhook-service
+      namespace: capa-system
+      path: /validate-controlplane-cluster-x-k8s-io-v1beta2-rosacontrolplane
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.rosacontrolplanes.controlplane.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - controlplane.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - rosacontrolplanes
   sideEffects: None
