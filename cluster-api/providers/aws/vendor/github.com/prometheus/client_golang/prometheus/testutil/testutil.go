@@ -47,7 +47,10 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+<<<<<<< HEAD
 	"google.golang.org/protobuf/proto"
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/internal"
@@ -231,6 +234,7 @@ func convertReaderToMetricFamily(reader io.Reader) ([]*dto.MetricFamily, error) 
 		return nil, fmt.Errorf("converting reader to metric families failed: %w", err)
 	}
 
+<<<<<<< HEAD
 	// The text protocol handles empty help fields inconsistently. When
 	// encoding, any non-nil value, include the empty string, produces a
 	// "# HELP" line. But when decoding, the help field is only set to a
@@ -245,6 +249,8 @@ func convertReaderToMetricFamily(reader io.Reader) ([]*dto.MetricFamily, error) 
 		}
 	}
 
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	return internal.NormalizeMetricFamilies(notNormalized), nil
 }
 

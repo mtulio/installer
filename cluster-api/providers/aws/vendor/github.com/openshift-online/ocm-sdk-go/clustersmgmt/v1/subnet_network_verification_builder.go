@@ -21,13 +21,12 @@ package v1 // github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1
 
 // SubnetNetworkVerificationBuilder contains the data and logic needed to build 'subnet_network_verification' objects.
 type SubnetNetworkVerificationBuilder struct {
-	bitmap_  uint32
-	id       string
-	href     string
-	details  []string
-	platform Platform
-	state    string
-	tags     map[string]string
+	bitmap_ uint32
+	id      string
+	href    string
+	details []string
+	state   string
+	tags    map[string]string
 }
 
 // NewSubnetNetworkVerification creates a new builder of 'subnet_network_verification' objects.
@@ -68,19 +67,10 @@ func (b *SubnetNetworkVerificationBuilder) Details(values ...string) *SubnetNetw
 	return b
 }
 
-// Platform sets the value of the 'platform' attribute to the given value.
-//
-// Representation of an platform type field.
-func (b *SubnetNetworkVerificationBuilder) Platform(value Platform) *SubnetNetworkVerificationBuilder {
-	b.platform = value
-	b.bitmap_ |= 16
-	return b
-}
-
 // State sets the value of the 'state' attribute to the given value.
 func (b *SubnetNetworkVerificationBuilder) State(value string) *SubnetNetworkVerificationBuilder {
 	b.state = value
-	b.bitmap_ |= 32
+	b.bitmap_ |= 16
 	return b
 }
 
@@ -88,9 +78,9 @@ func (b *SubnetNetworkVerificationBuilder) State(value string) *SubnetNetworkVer
 func (b *SubnetNetworkVerificationBuilder) Tags(value map[string]string) *SubnetNetworkVerificationBuilder {
 	b.tags = value
 	if value != nil {
-		b.bitmap_ |= 64
+		b.bitmap_ |= 32
 	} else {
-		b.bitmap_ &^= 64
+		b.bitmap_ &^= 32
 	}
 	return b
 }
@@ -109,7 +99,6 @@ func (b *SubnetNetworkVerificationBuilder) Copy(object *SubnetNetworkVerificatio
 	} else {
 		b.details = nil
 	}
-	b.platform = object.platform
 	b.state = object.state
 	if len(object.tags) > 0 {
 		b.tags = map[string]string{}
@@ -132,7 +121,6 @@ func (b *SubnetNetworkVerificationBuilder) Build() (object *SubnetNetworkVerific
 		object.details = make([]string, len(b.details))
 		copy(object.details, b.details)
 	}
-	object.platform = b.platform
 	object.state = b.state
 	if b.tags != nil {
 		object.tags = make(map[string]string)

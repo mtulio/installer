@@ -31,7 +31,11 @@ func Format(m proto.Message) string {
 	return MarshalOptions{Multiline: true}.Format(m)
 }
 
+<<<<<<< HEAD
 // Marshal writes the given [proto.Message] in JSON format using default options.
+=======
+// Marshal writes the given proto.Message in JSON format using default options.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // Do not depend on the output being stable. It may change over time across
 // different versions of the program.
 func Marshal(m proto.Message) ([]byte, error) {
@@ -81,6 +85,7 @@ type MarshalOptions struct {
 	//  ╚═══════╧════════════════════════════╝
 	EmitUnpopulated bool
 
+<<<<<<< HEAD
 	// EmitDefaultValues specifies whether to emit default-valued primitive fields,
 	// empty lists, and empty maps. The fields affected are as follows:
 	//  ╔═══════╤════════════════════════════════════════╗
@@ -100,6 +105,8 @@ type MarshalOptions struct {
 	// a strict superset of the latter.
 	EmitDefaultValues bool
 
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	// Resolver is used for looking up types when expanding google.protobuf.Any
 	// messages. If nil, this defaults to using protoregistry.GlobalTypes.
 	Resolver interface {
@@ -121,7 +128,11 @@ func (o MarshalOptions) Format(m proto.Message) string {
 	return string(b)
 }
 
+<<<<<<< HEAD
 // Marshal marshals the given [proto.Message] in the JSON format using options in
+=======
+// Marshal marshals the given proto.Message in the JSON format using options in
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // MarshalOptions. Do not depend on the output being stable. It may change over
 // time across different versions of the program.
 func (o MarshalOptions) Marshal(m proto.Message) ([]byte, error) {
@@ -197,11 +208,15 @@ func (m typeURLFieldRanger) Range(f func(protoreflect.FieldDescriptor, protorefl
 
 // unpopulatedFieldRanger wraps a protoreflect.Message and modifies its Range
 // method to additionally iterate over unpopulated fields.
+<<<<<<< HEAD
 type unpopulatedFieldRanger struct {
 	protoreflect.Message
 
 	skipNull bool
 }
+=======
+type unpopulatedFieldRanger struct{ protoreflect.Message }
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 
 func (m unpopulatedFieldRanger) Range(f func(protoreflect.FieldDescriptor, protoreflect.Value) bool) {
 	fds := m.Descriptor().Fields()
@@ -215,9 +230,12 @@ func (m unpopulatedFieldRanger) Range(f func(protoreflect.FieldDescriptor, proto
 		isProto2Scalar := fd.Syntax() == protoreflect.Proto2 && fd.Default().IsValid()
 		isSingularMessage := fd.Cardinality() != protoreflect.Repeated && fd.Message() != nil
 		if isProto2Scalar || isSingularMessage {
+<<<<<<< HEAD
 			if m.skipNull {
 				continue
 			}
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 			v = protoreflect.Value{} // use invalid value to emit null
 		}
 		if !f(fd, v) {
@@ -243,11 +261,16 @@ func (e encoder) marshalMessage(m protoreflect.Message, typeURL string) error {
 	defer e.EndObject()
 
 	var fields order.FieldRanger = m
+<<<<<<< HEAD
 	switch {
 	case e.opts.EmitUnpopulated:
 		fields = unpopulatedFieldRanger{Message: m, skipNull: false}
 	case e.opts.EmitDefaultValues:
 		fields = unpopulatedFieldRanger{Message: m, skipNull: true}
+=======
+	if e.opts.EmitUnpopulated {
+		fields = unpopulatedFieldRanger{m}
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	}
 	if typeURL != "" {
 		fields = typeURLFieldRanger{fields, typeURL}

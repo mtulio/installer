@@ -37,7 +37,10 @@ type RosaMachinePoolSpec struct {
 	// ROSAControlPlane version is used if not set.
 	//
 	// +optional
+<<<<<<< HEAD
 	// +kubebuilder:validation:XValidation:rule=`self.matches('^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$')`, message="version must be a valid semantic version"
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	Version string `json:"version,omitempty"`
 
 	// AvailabilityZone is an optinal field specifying the availability zone where instances of this machine pool should run

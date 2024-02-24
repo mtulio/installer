@@ -26,10 +26,13 @@ const (
 	//
 	PlatformAws Platform = "aws"
 	//
+<<<<<<< HEAD
 	PlatformAwsClassic Platform = "aws-classic"
 	//
 	PlatformAwsHostedCp Platform = "aws-hosted-cp"
 	//
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	PlatformGcp Platform = "gcp"
 	//
 	PlatformHostedCluster Platform = "hostedcluster"

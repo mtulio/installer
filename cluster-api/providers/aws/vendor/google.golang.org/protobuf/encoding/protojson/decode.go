@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+<<<<<<< HEAD
 	"google.golang.org/protobuf/encoding/protowire"
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	"google.golang.org/protobuf/internal/encoding/json"
 	"google.golang.org/protobuf/internal/encoding/messageset"
 	"google.golang.org/protobuf/internal/errors"
@@ -24,7 +27,11 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+<<<<<<< HEAD
 // Unmarshal reads the given []byte into the given [proto.Message].
+=======
+// Unmarshal reads the given []byte into the given proto.Message.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // The provided message must be mutable (e.g., a non-nil pointer to a message).
 func Unmarshal(b []byte, m proto.Message) error {
 	return UnmarshalOptions{}.Unmarshal(b, m)
@@ -38,7 +45,11 @@ type UnmarshalOptions struct {
 	// required fields will not return an error.
 	AllowPartial bool
 
+<<<<<<< HEAD
 	// If DiscardUnknown is set, unknown fields and enum name values are ignored.
+=======
+	// If DiscardUnknown is set, unknown fields are ignored.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	DiscardUnknown bool
 
 	// Resolver is used for looking up types when unmarshaling
@@ -48,6 +59,7 @@ type UnmarshalOptions struct {
 		protoregistry.MessageTypeResolver
 		protoregistry.ExtensionTypeResolver
 	}
+<<<<<<< HEAD
 
 	// RecursionLimit limits how deeply messages may be nested.
 	// If zero, a default limit is applied.
@@ -55,6 +67,11 @@ type UnmarshalOptions struct {
 }
 
 // Unmarshal reads the given []byte and populates the given [proto.Message]
+=======
+}
+
+// Unmarshal reads the given []byte and populates the given proto.Message
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // using options in the UnmarshalOptions object.
 // It will clear the message first before setting the fields.
 // If it returns an error, the given message may be partially set.
@@ -72,9 +89,12 @@ func (o UnmarshalOptions) unmarshal(b []byte, m proto.Message) error {
 	if o.Resolver == nil {
 		o.Resolver = protoregistry.GlobalTypes
 	}
+<<<<<<< HEAD
 	if o.RecursionLimit == 0 {
 		o.RecursionLimit = protowire.DefaultRecursionLimit
 	}
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 
 	dec := decoder{json.NewDecoder(b), o}
 	if err := dec.unmarshalMessage(m.ProtoReflect(), false); err != nil {
@@ -122,10 +142,13 @@ func (d decoder) syntaxError(pos int, f string, x ...interface{}) error {
 
 // unmarshalMessage unmarshals a message into the given protoreflect.Message.
 func (d decoder) unmarshalMessage(m protoreflect.Message, skipTypeURL bool) error {
+<<<<<<< HEAD
 	d.opts.RecursionLimit--
 	if d.opts.RecursionLimit < 0 {
 		return errors.New("exceeded max recursion depth")
 	}
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	if unmarshal := wellKnownTypeUnmarshaler(m.Descriptor().FullName()); unmarshal != nil {
 		return unmarshal(d, m)
 	}
@@ -278,9 +301,13 @@ func (d decoder) unmarshalSingular(m protoreflect.Message, fd protoreflect.Field
 	if err != nil {
 		return err
 	}
+<<<<<<< HEAD
 	if val.IsValid() {
 		m.Set(fd, val)
 	}
+=======
+	m.Set(fd, val)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	return nil
 }
 
@@ -343,7 +370,11 @@ func (d decoder) unmarshalScalar(fd protoreflect.FieldDescriptor) (protoreflect.
 		}
 
 	case protoreflect.EnumKind:
+<<<<<<< HEAD
 		if v, ok := unmarshalEnum(tok, fd, d.opts.DiscardUnknown); ok {
+=======
+		if v, ok := unmarshalEnum(tok, fd); ok {
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 			return v, nil
 		}
 
@@ -488,7 +519,11 @@ func unmarshalBytes(tok json.Token) (protoreflect.Value, bool) {
 	return protoreflect.ValueOfBytes(b), true
 }
 
+<<<<<<< HEAD
 func unmarshalEnum(tok json.Token, fd protoreflect.FieldDescriptor, discardUnknown bool) (protoreflect.Value, bool) {
+=======
+func unmarshalEnum(tok json.Token, fd protoreflect.FieldDescriptor) (protoreflect.Value, bool) {
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	switch tok.Kind() {
 	case json.String:
 		// Lookup EnumNumber based on name.
@@ -496,9 +531,12 @@ func unmarshalEnum(tok json.Token, fd protoreflect.FieldDescriptor, discardUnkno
 		if enumVal := fd.Enum().Values().ByName(protoreflect.Name(s)); enumVal != nil {
 			return protoreflect.ValueOfEnum(enumVal.Number()), true
 		}
+<<<<<<< HEAD
 		if discardUnknown {
 			return protoreflect.Value{}, true
 		}
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 
 	case json.Number:
 		if n, ok := tok.Int(32); ok {
@@ -559,9 +597,13 @@ func (d decoder) unmarshalList(list protoreflect.List, fd protoreflect.FieldDesc
 			if err != nil {
 				return err
 			}
+<<<<<<< HEAD
 			if val.IsValid() {
 				list.Append(val)
 			}
+=======
+			list.Append(val)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 		}
 	}
 
@@ -628,9 +670,14 @@ Loop:
 		if err != nil {
 			return err
 		}
+<<<<<<< HEAD
 		if pval.IsValid() {
 			mmap.Set(pkey, pval)
 		}
+=======
+
+		mmap.Set(pkey, pval)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	}
 
 	return nil

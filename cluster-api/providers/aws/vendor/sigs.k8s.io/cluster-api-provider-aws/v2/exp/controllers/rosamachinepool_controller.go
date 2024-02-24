@@ -7,7 +7,10 @@ import (
 
 	"github.com/blang/semver"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+<<<<<<< HEAD
 	"github.com/openshift/rosa/pkg/ocm"
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -176,11 +179,19 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 		}
 	}
 
+<<<<<<< HEAD
 	ocmClient, err := rosa.NewOCMClient(ctx, rosaControlPlaneScope)
 	if err != nil {
 		// TODO: need to expose in status, as likely the credentials are invalid
 		return ctrl.Result{}, fmt.Errorf("failed to create OCM client: %w", err)
 	}
+=======
+	rosaClient, err := rosa.NewRosaClient(ctx, rosaControlPlaneScope)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to create a rosa client: %w", err)
+	}
+	defer rosaClient.Close()
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 
 	failureMessage, err := validateMachinePoolSpec(machinePoolScope)
 	if err != nil {
@@ -198,7 +209,11 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 	machinePool := machinePoolScope.MachinePool
 	controlPlane := machinePoolScope.ControlPlane
 
+<<<<<<< HEAD
 	createdNodePool, found, err := ocmClient.GetNodePool(*controlPlane.Status.ID, rosaMachinePool.Spec.NodePoolName)
+=======
+	createdNodePool, found, err := rosaClient.GetNodePool(*controlPlane.Status.ID, rosaMachinePool.Spec.NodePoolName)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -209,7 +224,11 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 			conditions.MarkTrue(rosaMachinePool, expinfrav1.RosaMachinePoolReadyCondition)
 			rosaMachinePool.Status.Ready = true
 
+<<<<<<< HEAD
 			if err := r.reconcileMachinePoolVersion(machinePoolScope, ocmClient, createdNodePool); err != nil {
+=======
+			if err := r.reconcileMachinePoolVersion(machinePoolScope, rosaClient, createdNodePool); err != nil {
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 				return ctrl.Result{}, err
 			}
 
@@ -251,7 +270,11 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 
 	npBuilder.AWSNodePool(cmv1.NewAWSNodePool().InstanceType(rosaMachinePool.Spec.InstanceType))
 	if rosaMachinePool.Spec.Version != "" {
+<<<<<<< HEAD
 		npBuilder.Version(cmv1.NewVersion().ID(ocm.CreateVersionID(rosaMachinePool.Spec.Version, ocm.DefaultChannelGroup)))
+=======
+		npBuilder.Version(cmv1.NewVersion().ID(rosa.VersionID(rosaMachinePool.Spec.Version)))
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	}
 
 	nodePoolSpec, err := npBuilder.Build()
@@ -259,7 +282,11 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 		return ctrl.Result{}, fmt.Errorf("failed to build rosa nodepool: %w", err)
 	}
 
+<<<<<<< HEAD
 	createdNodePool, err = ocmClient.CreateNodePool(*controlPlane.Status.ID, nodePoolSpec)
+=======
+	createdNodePool, err = rosaClient.CreateNodePool(*controlPlane.Status.ID, nodePoolSpec)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create nodepool: %w", err)
 	}
@@ -275,6 +302,7 @@ func (r *ROSAMachinePoolReconciler) reconcileDelete(
 ) error {
 	machinePoolScope.Info("Reconciling deletion of RosaMachinePool")
 
+<<<<<<< HEAD
 	ocmClient, err := rosa.NewOCMClient(ctx, rosaControlPlaneScope)
 	if err != nil {
 		// TODO: need to expose in status, as likely the credentials are invalid
@@ -282,11 +310,24 @@ func (r *ROSAMachinePoolReconciler) reconcileDelete(
 	}
 
 	nodePool, found, err := ocmClient.GetNodePool(*machinePoolScope.ControlPlane.Status.ID, machinePoolScope.NodePoolName())
+=======
+	rosaClient, err := rosa.NewRosaClient(ctx, rosaControlPlaneScope)
+	if err != nil {
+		return fmt.Errorf("failed to create a rosa client: %w", err)
+	}
+	defer rosaClient.Close()
+
+	nodePool, found, err := rosaClient.GetNodePool(*machinePoolScope.ControlPlane.Status.ID, machinePoolScope.NodePoolName())
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	if err != nil {
 		return err
 	}
 	if found {
+<<<<<<< HEAD
 		if err := ocmClient.DeleteNodePool(*machinePoolScope.ControlPlane.Status.ID, nodePool.ID()); err != nil {
+=======
+		if err := rosaClient.DeleteNodePool(*machinePoolScope.ControlPlane.Status.ID, nodePool.ID()); err != nil {
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 			return err
 		}
 	}
@@ -296,7 +337,11 @@ func (r *ROSAMachinePoolReconciler) reconcileDelete(
 	return nil
 }
 
+<<<<<<< HEAD
 func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope *scope.RosaMachinePoolScope, ocmClient *ocm.Client, nodePool *cmv1.NodePool) error {
+=======
+func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope *scope.RosaMachinePoolScope, rosaClient *rosa.RosaClient, nodePool *cmv1.NodePool) error {
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	version := machinePoolScope.RosaMachinePool.Spec.Version
 	if version == "" {
 		version = machinePoolScope.ControlPlane.Spec.Version
@@ -308,12 +353,17 @@ func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope
 	}
 
 	clusterID := *machinePoolScope.ControlPlane.Status.ID
+<<<<<<< HEAD
 	_, scheduledUpgrade, err := ocmClient.GetHypershiftNodePoolUpgrade(clusterID, machinePoolScope.ControlPlane.Spec.RosaClusterName, nodePool.ID())
+=======
+	scheduledUpgrade, err := rosaClient.CheckNodePoolExistingScheduledUpgrade(clusterID, nodePool)
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 	if err != nil {
 		return fmt.Errorf("failed to get existing scheduled upgrades: %w", err)
 	}
 
 	if scheduledUpgrade == nil {
+<<<<<<< HEAD
 		policy, err := ocmClient.BuildNodeUpgradePolicy(version, nodePool.ID(), ocm.UpgradeScheduling{
 			AutomaticUpgrades: false,
 			// The OCM API places guardrails around the minimum and maximum delay that a user can request,
@@ -328,6 +378,9 @@ func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope
 		}
 
 		scheduledUpgrade, err = ocmClient.ScheduleNodePoolUpgrade(clusterID, nodePool.ID(), policy)
+=======
+		scheduledUpgrade, err = rosaClient.ScheduleNodePoolUpgrade(clusterID, nodePool, version, time.Now())
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 		if err != nil {
 			return fmt.Errorf("failed to schedule nodePool upgrade to version %s: %w", version, err)
 		}

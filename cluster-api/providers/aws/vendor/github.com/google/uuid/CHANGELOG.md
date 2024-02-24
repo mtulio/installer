@@ -1,5 +1,6 @@
 # Changelog
 
+<<<<<<< HEAD
 ## [1.6.0](https://github.com/google/uuid/compare/v1.5.0...v1.6.0) (2024-01-16)
 
 
@@ -31,6 +32,8 @@
 
 * Clarify that Parse's job is to parse but not necessarily validate strings. (Documents current behavior)
 
+=======
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 ## [1.3.1](https://github.com/google/uuid/compare/v1.3.0...v1.3.1) (2023-08-18)
 
 

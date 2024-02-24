@@ -6,6 +6,10 @@
 // format. It follows the guide at
 // https://protobuf.dev/programming-guides/proto3#json.
 //
+<<<<<<< HEAD
 // This package produces a different output than the standard [encoding/json]
+=======
+// This package produces a different output than the standard "encoding/json"
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // package, which does not operate correctly on protocol buffer messages.
 package protojson

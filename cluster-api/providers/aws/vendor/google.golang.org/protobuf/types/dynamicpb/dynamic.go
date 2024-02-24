@@ -49,6 +49,7 @@ type extensionType struct {
 
 // A Message is a dynamically constructed protocol buffer message.
 //
+<<<<<<< HEAD
 // Message implements the [google.golang.org/protobuf/proto.Message] interface,
 // and may be used with all  standard proto package functions
 // such as Marshal, Unmarshal, and so forth.
@@ -56,6 +57,14 @@ type extensionType struct {
 // Message also implements the [protoreflect.Message] interface.
 // See the [protoreflect] package documentation for that interface for how to
 // get and set fields and otherwise interact with the contents of a Message.
+=======
+// Message implements the proto.Message interface, and may be used with all
+// standard proto package functions such as Marshal, Unmarshal, and so forth.
+//
+// Message also implements the protoreflect.Message interface. See the protoreflect
+// package documentation for that interface for how to get and set fields and
+// otherwise interact with the contents of a Message.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 //
 // Reflection API functions which construct messages, such as NewField,
 // return new dynamic messages of the appropriate type. Functions which take
@@ -88,7 +97,11 @@ func NewMessage(desc protoreflect.MessageDescriptor) *Message {
 // ProtoMessage implements the legacy message interface.
 func (m *Message) ProtoMessage() {}
 
+<<<<<<< HEAD
 // ProtoReflect implements the [protoreflect.ProtoMessage] interface.
+=======
+// ProtoReflect implements the protoreflect.ProtoMessage interface.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) ProtoReflect() protoreflect.Message {
 	return m
 }
@@ -116,25 +129,41 @@ func (m *Message) Type() protoreflect.MessageType {
 }
 
 // New returns a newly allocated empty message with the same descriptor.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) New() protoreflect.Message {
 	return m.Type().New()
 }
 
 // Interface returns the message.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Interface() protoreflect.ProtoMessage {
 	return m
 }
 
+<<<<<<< HEAD
 // ProtoMethods is an internal detail of the [protoreflect.Message] interface.
+=======
+// ProtoMethods is an internal detail of the protoreflect.Message interface.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 // Users should never call this directly.
 func (m *Message) ProtoMethods() *protoiface.Methods {
 	return nil
 }
 
 // Range visits every populated field in undefined order.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Range(f func(protoreflect.FieldDescriptor, protoreflect.Value) bool) {
 	for num, v := range m.known {
 		fd := m.ext[num]
@@ -151,7 +180,11 @@ func (m *Message) Range(f func(protoreflect.FieldDescriptor, protoreflect.Value)
 }
 
 // Has reports whether a field is populated.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Has(fd protoreflect.FieldDescriptor) bool {
 	m.checkField(fd)
 	if fd.IsExtension() && m.ext[fd.Number()] != fd {
@@ -165,7 +198,11 @@ func (m *Message) Has(fd protoreflect.FieldDescriptor) bool {
 }
 
 // Clear clears a field.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Clear(fd protoreflect.FieldDescriptor) {
 	m.checkField(fd)
 	num := fd.Number()
@@ -174,7 +211,11 @@ func (m *Message) Clear(fd protoreflect.FieldDescriptor) {
 }
 
 // Get returns the value of a field.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Get(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	m.checkField(fd)
 	num := fd.Number()
@@ -213,7 +254,11 @@ func (m *Message) Get(fd protoreflect.FieldDescriptor) protoreflect.Value {
 }
 
 // Mutable returns a mutable reference to a repeated, map, or message field.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Mutable(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	m.checkField(fd)
 	if !fd.IsMap() && !fd.IsList() && fd.Message() == nil {
@@ -242,7 +287,11 @@ func (m *Message) Mutable(fd protoreflect.FieldDescriptor) protoreflect.Value {
 }
 
 // Set stores a value in a field.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) Set(fd protoreflect.FieldDescriptor, v protoreflect.Value) {
 	m.checkField(fd)
 	if m.known == nil {
@@ -285,7 +334,11 @@ func (m *Message) clearOtherOneofFields(fd protoreflect.FieldDescriptor) {
 }
 
 // NewField returns a new value for assignable to the field of a given descriptor.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) NewField(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	m.checkField(fd)
 	switch {
@@ -306,7 +359,11 @@ func (m *Message) NewField(fd protoreflect.FieldDescriptor) protoreflect.Value {
 }
 
 // WhichOneof reports which field in a oneof is populated, returning nil if none are populated.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) WhichOneof(od protoreflect.OneofDescriptor) protoreflect.FieldDescriptor {
 	for i := 0; i < od.Fields().Len(); i++ {
 		fd := od.Fields().Get(i)
@@ -318,13 +375,21 @@ func (m *Message) WhichOneof(od protoreflect.OneofDescriptor) protoreflect.Field
 }
 
 // GetUnknown returns the raw unknown fields.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) GetUnknown() protoreflect.RawFields {
 	return m.unknown
 }
 
 // SetUnknown sets the raw unknown fields.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) SetUnknown(r protoreflect.RawFields) {
 	if m.known == nil {
 		panic(errors.New("%v: modification of read-only message", m.typ.desc.FullName()))
@@ -333,7 +398,11 @@ func (m *Message) SetUnknown(r protoreflect.RawFields) {
 }
 
 // IsValid reports whether the message is valid.
+<<<<<<< HEAD
 // See [protoreflect.Message] for details.
+=======
+// See protoreflect.Message for details.
+>>>>>>> 9cb2dd3334 (cluster-api/providers/aws: vendor)
 func (m *Message) IsValid() bool {
 	return m.known != nil
 }

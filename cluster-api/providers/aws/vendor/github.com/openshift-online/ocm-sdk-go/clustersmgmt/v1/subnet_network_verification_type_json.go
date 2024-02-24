@@ -80,20 +80,11 @@ func writeSubnetNetworkVerification(object *SubnetNetworkVerification, stream *j
 		if count > 0 {
 			stream.WriteMore()
 		}
-		stream.WriteObjectField("platform")
-		stream.WriteString(string(object.platform))
-		count++
-	}
-	present_ = object.bitmap_&32 != 0
-	if present_ {
-		if count > 0 {
-			stream.WriteMore()
-		}
 		stream.WriteObjectField("state")
 		stream.WriteString(object.state)
 		count++
 	}
-	present_ = object.bitmap_&64 != 0 && object.tags != nil
+	present_ = object.bitmap_&32 != 0 && object.tags != nil
 	if present_ {
 		if count > 0 {
 			stream.WriteMore()
@@ -160,15 +151,10 @@ func readSubnetNetworkVerification(iterator *jsoniter.Iterator) *SubnetNetworkVe
 			value := readStringList(iterator)
 			object.details = value
 			object.bitmap_ |= 8
-		case "platform":
-			text := iterator.ReadString()
-			value := Platform(text)
-			object.platform = value
-			object.bitmap_ |= 16
 		case "state":
 			value := iterator.ReadString()
 			object.state = value
-			object.bitmap_ |= 32
+			object.bitmap_ |= 16
 		case "tags":
 			value := map[string]string{}
 			for {
@@ -180,7 +166,7 @@ func readSubnetNetworkVerification(iterator *jsoniter.Iterator) *SubnetNetworkVe
 				value[key] = item
 			}
 			object.tags = value
-			object.bitmap_ |= 64
+			object.bitmap_ |= 32
 		default:
 			iterator.ReadAny()
 		}
