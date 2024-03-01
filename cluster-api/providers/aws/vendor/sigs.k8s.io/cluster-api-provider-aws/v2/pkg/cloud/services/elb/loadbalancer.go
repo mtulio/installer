@@ -250,7 +250,7 @@ func (s *Service) getAPIServerLBSpec(elbName string, lbSpec *infrav1.AWSLoadBala
 		// The load balancer APIs require us to only attach one subnet for each AZ.
 		subnets := s.scope.Subnets().FilterPrivate()
 
-		if s.scope.ControlPlaneLoadBalancerScheme() == infrav1.ELBSchemeInternetFacing {
+		if (lbSpec != nil && lbSpec.Scheme != nil) && *lbSpec.Scheme == infrav1.ELBSchemeInternetFacing {
 			subnets = s.scope.Subnets().FilterPublic()
 		}
 
