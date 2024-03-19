@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -24,8 +25,6 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user tags: %w", err)
 	}
-
-	mainCIDR := capiutils.CIDRFromInstallConfig(ic)
 
 	awsCluster := &capa.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,7 +162,7 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 						Protocol:    capa.SecurityGroupProtocolTCP,
 						FromPort:    22623,
 						ToPort:      22623,
-						CidrBlocks:  []string{mainCIDR.String()},
+						CidrBlocks:  []string{capiutils.CIDRFromInstallConfig(ic).String()},
 					},
 				},
 			},
@@ -206,12 +205,10 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 		}
 	}
 
-	// Set the VPC and zones (managed) or subnets (BYO VPC) based in the
-	// install-config.yaml.
-	err = setZones(&zoneConfigInput{
+	// Set the NetworkSpec.Subnets from VPC and zones (managed)
+	// or subnets (BYO VPC) based in the install-config.yaml.
+	err = setSubnets(context.TODO(), &zonesInput{
 		InstallConfig: ic,
-		Config:        ic.Config,
-		Meta:          ic.AWS,
 		ClusterID:     clusterID,
 		Cluster:       awsCluster,
 	})
