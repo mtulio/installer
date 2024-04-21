@@ -74,8 +74,8 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.30.0 // indirect
 	github.com/openshift-online/ocm-common v0.0.0-20240129111424-ff8c6c11d909 // indirect
-	github.com/openshift-online/ocm-sdk-go v0.1.404 // indirect
-	github.com/openshift/rosa v1.2.35-rc1.0.20240229115423-42874686e22d // indirect
+	github.com/openshift-online/ocm-sdk-go v0.1.409 // indirect
+	github.com/openshift/rosa v1.2.35-rc1.0.20240301152457-ad986cecd364 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.18.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
@@ -144,3 +144,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+// Versions (branch) from BYO IP development github.com/mtulio:
+// SPLAT-1437-capa-byoip : version reusing network service
+// SPLAT-1437-capa-byoip-eip : version isolating EIP as sub-service of network
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627

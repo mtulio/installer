@@ -2079,21 +2079,28 @@ spec:
                       publicIpv4Pool:
                         description: PublicIpv4Pool defines the Public IPv4 Pool to
                           be used for VPC resources created in public subnets.
+                        maxLength: 30
                         type: string
+                        x-kubernetes-validations:
+                        - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                          rule: self.startsWith('ipv4pool-ec2-')
                       publicIpv4PoolFallbackOrder:
-                        description: "QUESTION(mtulio): do we need this for safe reasons?
-                          PublicIpv4PoolFallBackOrder defines the fallbacl when the
-                          Public IPv4 Pool has been exhausted, no more IPv4 address
-                          available in the pool. \n When amazon-provided it tries
-                          to create in the specified pool, and if it is exhausted
-                          or failed, it will fallback to Amazon-provided IP address.
-                          \n When 'none' it will not use any fallback strategy and
-                          will fail to provision when the fallback is trigeredin public
-                          subnets."
+                        default: amazon-provided
+                        description: "PublicIpv4PoolFallBackOrder defines the fallback
+                          when the Public IPv4 Pool has been exhausted, no more IPv4
+                          address available in the pool. \n When amazon-provided it
+                          tries to create in the specified pool defined in publicIpv4Pool,
+                          and if it is exhausted or failed, it will fallback to Amazon-provided
+                          IPv4 pool. \n When 'none' it will not use any fallback strategy
+                          and will fail to provision when the fallback is trigeredin
+                          public subnets."
                         enum:
                         - amazon-provided
                         - none
                         type: string
+                        x-kubernetes-validations:
+                        - message: allowed values are 'none' and 'amazon-pool'
+                          rule: self in ['none','amazon-pool']
                       tags:
                         additionalProperties:
                           type: string
@@ -2354,6 +2361,10 @@ spec:
                       - type
                       type: object
                     type: array
+                  associatePublicIpAddress:
+                    description: AssociatePublicIpAddress is the create instance flag
+                      to assign public Ip address on launch, discovered by AWSMachineSpec.PublicIP.
+                    type: boolean
                   availabilityZone:
                     description: Availability zone of instance
                     type: string
@@ -4566,22 +4577,30 @@ spec:
                                 description: PublicIpv4Pool defines the Public IPv4
                                   Pool to be used for VPC resources created in public
                                   subnets.
+                                maxLength: 30
                                 type: string
+                                x-kubernetes-validations:
+                                - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                                  rule: self.startsWith('ipv4pool-ec2-')
                               publicIpv4PoolFallbackOrder:
-                                description: "QUESTION(mtulio): do we need this for
-                                  safe reasons? PublicIpv4PoolFallBackOrder defines
-                                  the fallbacl when the Public IPv4 Pool has been
+                                default: amazon-provided
+                                description: "PublicIpv4PoolFallBackOrder defines
+                                  the fallback when the Public IPv4 Pool has been
                                   exhausted, no more IPv4 address available in the
                                   pool. \n When amazon-provided it tries to create
-                                  in the specified pool, and if it is exhausted or
-                                  failed, it will fallback to Amazon-provided IP address.
-                                  \n When 'none' it will not use any fallback strategy
-                                  and will fail to provision when the fallback is
-                                  trigeredin public subnets."
+                                  in the specified pool defined in publicIpv4Pool,
+                                  and if it is exhausted or failed, it will fallback
+                                  to Amazon-provided IPv4 pool. \n When 'none' it
+                                  will not use any fallback strategy and will fail
+                                  to provision when the fallback is trigeredin public
+                                  subnets."
                                 enum:
                                 - amazon-provided
                                 - none
                                 type: string
+                                x-kubernetes-validations:
+                                - message: allowed values are 'none' and 'amazon-pool'
+                                  rule: self in ['none','amazon-pool']
                               tags:
                                 additionalProperties:
                                   type: string
@@ -7200,7 +7219,27 @@ spec:
               publicIpv4Pool:
                 description: PublicIpv4Pool defines the Public IPv4 Pool to be used
                   for VPC resources created in public subnets.
+                maxLength: 30
                 type: string
+                x-kubernetes-validations:
+                - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                  rule: self.startsWith('ipv4pool-ec2-')
+              publicIpv4PoolFallbackOrder:
+                default: amazon-pool
+                description: "PublicIpv4PoolFallBackOrder defines the fallback when
+                  the Public IPv4 Pool has been exhausted, no more IPv4 address available
+                  in the pool. \n When amazon-pool it tries to create in the specified
+                  pool defined in publicIpv4Pool, and if it is exhausted or failed,
+                  it will fallback to Amazon-provided IPv4 pool. \n When 'none' it
+                  will not use any fallback strategy and will fail to provision when
+                  the fallback is trigeredin public subnets."
+                enum:
+                - amazon-pool
+                - none
+                type: string
+                x-kubernetes-validations:
+                - message: allowed values are 'none' and 'amazon-pool'
+                  rule: self in ['none','amazon-pool']
               rootVolume:
                 description: RootVolume encapsulates the configuration options for
                   the root volume
@@ -8291,7 +8330,28 @@ spec:
                       publicIpv4Pool:
                         description: PublicIpv4Pool defines the Public IPv4 Pool to
                           be used for VPC resources created in public subnets.
+                        maxLength: 30
                         type: string
+                        x-kubernetes-validations:
+                        - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                          rule: self.startsWith('ipv4pool-ec2-')
+                      publicIpv4PoolFallbackOrder:
+                        default: amazon-pool
+                        description: "PublicIpv4PoolFallBackOrder defines the fallback
+                          when the Public IPv4 Pool has been exhausted, no more IPv4
+                          address available in the pool. \n When amazon-pool it tries
+                          to create in the specified pool defined in publicIpv4Pool,
+                          and if it is exhausted or failed, it will fallback to Amazon-provided
+                          IPv4 pool. \n When 'none' it will not use any fallback strategy
+                          and will fail to provision when the fallback is trigeredin
+                          public subnets."
+                        enum:
+                        - amazon-pool
+                        - none
+                        type: string
+                        x-kubernetes-validations:
+                        - message: allowed values are 'none' and 'amazon-pool'
+                          rule: self in ['none','amazon-pool']
                       rootVolume:
                         description: RootVolume encapsulates the configuration options
                           for the root volume
@@ -9222,21 +9282,28 @@ spec:
                       publicIpv4Pool:
                         description: PublicIpv4Pool defines the Public IPv4 Pool to
                           be used for VPC resources created in public subnets.
+                        maxLength: 30
                         type: string
+                        x-kubernetes-validations:
+                        - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                          rule: self.startsWith('ipv4pool-ec2-')
                       publicIpv4PoolFallbackOrder:
-                        description: "QUESTION(mtulio): do we need this for safe reasons?
-                          PublicIpv4PoolFallBackOrder defines the fallbacl when the
-                          Public IPv4 Pool has been exhausted, no more IPv4 address
-                          available in the pool. \n When amazon-provided it tries
-                          to create in the specified pool, and if it is exhausted
-                          or failed, it will fallback to Amazon-provided IP address.
-                          \n When 'none' it will not use any fallback strategy and
-                          will fail to provision when the fallback is trigeredin public
-                          subnets."
+                        default: amazon-provided
+                        description: "PublicIpv4PoolFallBackOrder defines the fallback
+                          when the Public IPv4 Pool has been exhausted, no more IPv4
+                          address available in the pool. \n When amazon-provided it
+                          tries to create in the specified pool defined in publicIpv4Pool,
+                          and if it is exhausted or failed, it will fallback to Amazon-provided
+                          IPv4 pool. \n When 'none' it will not use any fallback strategy
+                          and will fail to provision when the fallback is trigeredin
+                          public subnets."
                         enum:
                         - amazon-provided
                         - none
                         type: string
+                        x-kubernetes-validations:
+                        - message: allowed values are 'none' and 'amazon-pool'
+                          rule: self in ['none','amazon-pool']
                       tags:
                         additionalProperties:
                           type: string
@@ -9556,6 +9623,10 @@ spec:
                       - type
                       type: object
                     type: array
+                  associatePublicIpAddress:
+                    description: AssociatePublicIpAddress is the create instance flag
+                      to assign public Ip address on launch, discovered by AWSMachineSpec.PublicIP.
+                    type: boolean
                   availabilityZone:
                     description: Availability zone of instance
                     type: string
@@ -11079,21 +11150,28 @@ spec:
                       publicIpv4Pool:
                         description: PublicIpv4Pool defines the Public IPv4 Pool to
                           be used for VPC resources created in public subnets.
+                        maxLength: 30
                         type: string
+                        x-kubernetes-validations:
+                        - message: publicIpv4Pool must start with 'ipv4pool-ec2-'
+                          rule: self.startsWith('ipv4pool-ec2-')
                       publicIpv4PoolFallbackOrder:
-                        description: "QUESTION(mtulio): do we need this for safe reasons?
-                          PublicIpv4PoolFallBackOrder defines the fallbacl when the
-                          Public IPv4 Pool has been exhausted, no more IPv4 address
-                          available in the pool. \n When amazon-provided it tries
-                          to create in the specified pool, and if it is exhausted
-                          or failed, it will fallback to Amazon-provided IP address.
-                          \n When 'none' it will not use any fallback strategy and
-                          will fail to provision when the fallback is trigeredin public
-                          subnets."
+                        default: amazon-provided
+                        description: "PublicIpv4PoolFallBackOrder defines the fallback
+                          when the Public IPv4 Pool has been exhausted, no more IPv4
+                          address available in the pool. \n When amazon-provided it
+                          tries to create in the specified pool defined in publicIpv4Pool,
+                          and if it is exhausted or failed, it will fallback to Amazon-provided
+                          IPv4 pool. \n When 'none' it will not use any fallback strategy
+                          and will fail to provision when the fallback is trigeredin
+                          public subnets."
                         enum:
                         - amazon-provided
                         - none
                         type: string
+                        x-kubernetes-validations:
+                        - message: allowed values are 'none' and 'amazon-pool'
+                          rule: self in ['none','amazon-pool']
                       tags:
                         additionalProperties:
                           type: string
@@ -11426,6 +11504,10 @@ spec:
                       - type
                       type: object
                     type: array
+                  associatePublicIpAddress:
+                    description: AssociatePublicIpAddress is the create instance flag
+                      to assign public Ip address on launch, discovered by AWSMachineSpec.PublicIP.
+                    type: boolean
                   availabilityZone:
                     description: Availability zone of instance
                     type: string

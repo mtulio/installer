@@ -344,3 +344,8 @@ replace go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.11.2
 replace golang.org/x/oauth2 => golang.org/x/oauth2 v0.15.0
 
 replace google.golang.org/api => google.golang.org/api v0.157.0
+
+// Branchs:
+// SPLAT-1437-capa-byoip : version reusing network service
+// SPLAT-1437-capa-byoip-eip : version isolating EIP as sub-service of network
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627

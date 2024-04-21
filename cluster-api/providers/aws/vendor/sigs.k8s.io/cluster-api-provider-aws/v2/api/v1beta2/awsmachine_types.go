@@ -180,6 +180,28 @@ type AWSMachineSpec struct {
 	// PrivateDNSName is the options for the instance hostname.
 	// +optional
 	PrivateDNSName *PrivateDNSName `json:"privateDnsName,omitempty"`
+
+	// PublicIpv4Pool defines the Public IPv4 Pool to be used for VPC resources created
+	// in public subnets.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxLength=30
+	// +kubebuilder:validation:XValidation:rule="self.startsWith('ipv4pool-ec2-')",message="publicIpv4Pool must start with 'ipv4pool-ec2-'"
+	PublicIpv4Pool *string `json:"publicIpv4Pool,omitempty"`
+
+	// PublicIpv4PoolFallBackOrder defines the fallback when the Public IPv4 Pool has been exhausted,
+	// no more IPv4 address available in the pool. NOTE: this is not implemented yet.
+	//
+	// When amazon-pool it tries to create in the specified pool defined in publicIpv4Pool,
+	// and if it is exhausted or failed, it will fallback to Amazon-provided IPv4 pool.
+	//
+	// When 'none' it will not use any fallback strategy and will fail to provision when the fallback
+	// is trigeredin public subnets.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum:=amazon-pool;none
+	// +kubebuilder:default:="amazon-pool"
+	PublicIpv4PoolFallbackOrder *PublicIpv4PoolFallbackOrder `json:"publicIpv4PoolFallbackOrder,omitempty"`
 }
 
 // CloudInit defines options related to the bootstrapping systems where

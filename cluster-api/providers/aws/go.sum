@@ -245,6 +245,8 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627 h1:HrFSDABLSMQGDoE0D/wlAXLntGQDFFylyM29SWYu7FU=
+github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627/go.mod h1:FCax6cEAO5lwSZYDSuHJZjztKo+wn/B0mcQrQnbKqAo=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
@@ -264,10 +266,10 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/openshift-online/ocm-common v0.0.0-20240129111424-ff8c6c11d909 h1:WV67GNazQuGDaLX3kBbz0859NYPOQCsDCY5XUScF85M=
 github.com/openshift-online/ocm-common v0.0.0-20240129111424-ff8c6c11d909/go.mod h1:7FaAb07S63RF4sFMLSLtQaJLvPdaRnhAT4dBLD8/5kM=
-github.com/openshift-online/ocm-sdk-go v0.1.404 h1:rcmqyUYowD1yr1f7NQmoTqa1d/6zW0ZAxqYcpHpV2dk=
-github.com/openshift-online/ocm-sdk-go v0.1.404/go.mod h1:tke8vKcE7eHKyRbkJv6qo4ljo919zhx04uyQTcgF5cQ=
-github.com/openshift/rosa v1.2.35-rc1.0.20240229115423-42874686e22d h1:5LHaLb2YhmAaSkODnPLT/jbTE5oYmkrbkJ4jkYi7tpE=
-github.com/openshift/rosa v1.2.35-rc1.0.20240229115423-42874686e22d/go.mod h1:CR7cWdXZLWpsyskvqTWtAZBG5PaWrzYHy9tbaubbXIA=
+github.com/openshift-online/ocm-sdk-go v0.1.409 h1:M7GB1iURdXTFJ6N5cvMxLz0L7wWwdnUvwDOCDFZ7L1s=
+github.com/openshift-online/ocm-sdk-go v0.1.409/go.mod h1:8ECJertR5BiblaX5f2siXHXpi+ydYZjoROlVMppmmV4=
+github.com/openshift/rosa v1.2.35-rc1.0.20240301152457-ad986cecd364 h1:j1aGLgZhO5xXpYgGAjmraioHTvCK7+gXZXoN9cnpnkw=
+github.com/openshift/rosa v1.2.35-rc1.0.20240301152457-ad986cecd364/go.mod h1:kSNsBW8P9KfLCsZYGIrr/aKbLDct8I5gW0e4cCRrr0o=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
@@ -537,8 +539,6 @@ sigs.k8s.io/aws-iam-authenticator v0.6.13 h1:QSQcAkpt/hF97Ogyoz6sj3WD2twTd2cmxFb
 sigs.k8s.io/aws-iam-authenticator v0.6.13/go.mod h1:CnvFyzR/xeLHmUY/BD0qW6q0wp6KIwXmFp4eTfrHdP8=
 sigs.k8s.io/cluster-api v1.6.1 h1:I34p/fwgRlEhs+o9cUhKXDwNNfPS3no0yJsd2bJyQVc=
 sigs.k8s.io/cluster-api v1.6.1/go.mod h1:DaxwruDvSaEYq5q6FREDaGzX6UsAVUCA99Sp8vfMHyQ=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.4.1-0.20240306201835-baf8d59ff495 h1:TZzGXnwUyVWxwRxYo4OUHVMZNChbRKlZ/Y8Ybxj94RU=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.4.1-0.20240306201835-baf8d59ff495/go.mod h1:HByWUklYZD/abXD07CNhMtqmieq+EYV6PpsntJS9kPA=
 sigs.k8s.io/controller-runtime v0.16.3 h1:2TuvuokmfXvDUamSx1SuAOO3eTyye+47mJCigwG62c4=
 sigs.k8s.io/controller-runtime v0.16.3/go.mod h1:j7bialYoSn142nv9sCOJmQgDXQXxnroFU4VnX/brVJ0=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=

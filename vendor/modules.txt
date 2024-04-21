@@ -9891,7 +9891,7 @@ sigs.k8s.io/cluster-api/util/conversion
 sigs.k8s.io/cluster-api/util/kubeconfig
 sigs.k8s.io/cluster-api/util/secret
 sigs.k8s.io/cluster-api/util/topology
-# sigs.k8s.io/cluster-api-provider-aws/v2 v2.4.1-0.20240306201835-baf8d59ff495
+# sigs.k8s.io/cluster-api-provider-aws/v2 v2.4.1-0.20240306201835-baf8d59ff495 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627
 ## explicit; go 1.21
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
@@ -10105,3 +10105,4 @@ sigs.k8s.io/yaml/goyaml.v3
 # go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.11.2
 # golang.org/x/oauth2 => golang.org/x/oauth2 v0.15.0
 # google.golang.org/api => google.golang.org/api v0.157.0
+# sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240403190118-dad9f3ce8627

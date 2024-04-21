@@ -237,6 +237,11 @@ type Instance struct {
 	// PrivateDNSName is the options for the instance hostname.
 	// +optional
 	PrivateDNSName *PrivateDNSName `json:"privateDnsName,omitempty"`
+
+	// AssociatePublicIpAddress is the create instance flag to assign public Ip address
+	// on launch, discovered by AWSMachineSpec.PublicIP.
+	// +optional
+	AssociatePublicIpAddress *bool `json:"associatePublicIpAddress,omitempty"`
 }
 
 // InstanceMetadataState describes the state of InstanceMetadataOptions.HttpEndpoint and InstanceMetadataOptions.InstanceMetadataTags
