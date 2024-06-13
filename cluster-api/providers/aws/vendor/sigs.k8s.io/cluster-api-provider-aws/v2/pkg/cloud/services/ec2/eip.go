@@ -20,6 +20,9 @@ func (s *Service) ReconcileElasticIPFromPublicPool(pool *infrav1.ElasticIPPool, 
 	// TODO: check if the instance is in the state allowing EIP association.
 	// Expected instance states: pending or running
 	// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-lifecycle.html
+	if instance.State != infrav1.InstanceStateRunning {
+		return fmt.Errorf("instance %q must be in instance state %q before associating Elastic IP: %q", instance.ID, infrav1.InstanceStateRunning, instance.State)
+	}
 	if err := s.getAndAssociateAddressesToInstance(pool, getElasticIPRoleName(instance.ID), instance.ID); err != nil {
 		return fmt.Errorf("failed to reconcile Elastic IP: %w", err)
 	}
