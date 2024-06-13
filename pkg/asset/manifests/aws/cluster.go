@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -125,7 +126,7 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 						Protocol:                 capa.SecurityGroupProtocolTCP,
 						FromPort:                 22623,
 						ToPort:                   22623,
-						SourceSecurityGroupRoles: []capa.SecurityGroupRole{"node", "controlplane"},
+						SourceSecurityGroupRoles: []capa.SecurityGroupRole{"node", "controlplane", "apiserver-lb"},
 					},
 					{
 						Description:              "controller-manager",
@@ -196,6 +197,38 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 		},
 	}
 	awsCluster.SetGroupVersionKind(capa.GroupVersion.WithKind("AWSCluster"))
+
+	// FIXME: https://issues.redhat.com/browse/OCPBUGS-34819
+	// CAPA does not support discoverying additional VPC CIDRs to create Kubernetes
+	// API rules from/to Network Load Balancer when unmanaged VPC (BYO VPC).
+	// We should check if the Machine CIDR provided in the config is primary or
+	// additional from VPC in BYO VPC deployments, if it is additional, an new
+	// SG rule must be added to LB API to allow ingress traffic from the CIDRs where
+	// the nodes is created.
+	machineConfigCidr := capiutils.CIDRFromInstallConfig(ic).String()
+	lbGroupIngressRuleRequiresAdditionalCidrRules := func() bool {
+		if len(ic.Config.AWS.Subnets) == 0 {
+			return false
+		}
+		if ic.AWS.GetVpcIpv4Cidr() == machineConfigCidr {
+			return false
+		}
+		if strings.Contains(strings.Join(ic.AWS.GetVpcIpv4Cidrs(), ","), machineConfigCidr) {
+			return true
+		}
+		return false
+	}
+	if lbGroupIngressRuleRequiresAdditionalCidrRules() {
+		awsCluster.Spec.ControlPlaneLoadBalancer.IngressRules = append(awsCluster.Spec.ControlPlaneLoadBalancer.IngressRules, []capa.IngressRule{
+			{
+				Description: "Kubernetes API internal traffic from additional CIDR",
+				Protocol:    capa.SecurityGroupProtocolTCP,
+				FromPort:    6443,
+				ToPort:      6443,
+				CidrBlocks:  []string{machineConfigCidr},
+			},
+		}...)
+	}
 
 	if ic.Config.PublicAPI() {
 		awsCluster.Spec.SecondaryControlPlaneLoadBalancer = &capa.AWSLoadBalancerSpec{
