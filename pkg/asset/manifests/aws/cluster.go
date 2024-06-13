@@ -191,6 +191,20 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 						ToPort:      22623,
 						CidrBlocks:  []string{capiutils.CIDRFromInstallConfig(ic).String()},
 					},
+					{
+						Description:              "Machine Config Server internal traffic from nodes",
+						Protocol:                 capa.SecurityGroupProtocolTCP,
+						FromPort:                 22623,
+						ToPort:                   22623,
+						SourceSecurityGroupRoles: []capa.SecurityGroupRole{"node"},
+					},
+					{
+						Description:              "Kubernetes API internal traffic from nodes",
+						Protocol:                 capa.SecurityGroupProtocolTCP,
+						FromPort:                 6443,
+						ToPort:                   6443,
+						SourceSecurityGroupRoles: []capa.SecurityGroupRole{"node"},
+					},
 				},
 			},
 			AdditionalTags: tags,
@@ -198,13 +212,14 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 	}
 	awsCluster.SetGroupVersionKind(capa.GroupVersion.WithKind("AWSCluster"))
 
-	// FIXME: https://issues.redhat.com/browse/OCPBUGS-34819
-	// CAPA does not support discoverying additional VPC CIDRs to create Kubernetes
-	// API rules from/to Network Load Balancer when unmanaged VPC (BYO VPC).
-	// We should check if the Machine CIDR provided in the config is primary or
-	// additional from VPC in BYO VPC deployments, if it is additional, an new
-	// SG rule must be added to LB API to allow ingress traffic from the CIDRs where
-	// the nodes is created.
+	// FIXME:
+	// CAPA is not discovering additional VPC CIDRs when BYO VPC to generate
+	// ingress rules for the NLB for Kubernetes API.
+	// https://github.com/kubernetes-sigs/cluster-api-provider-aws/issues/5008
+	//
+	// Adding a new ingress rule 6443/TCP rule to enforce MachineCIDR when
+	// BYO VPC with multi-CIDR in the VPC. MCS (22623) is already added by
+	// default following the configuration of Machine CIDR.
 	machineConfigCidr := capiutils.CIDRFromInstallConfig(ic).String()
 	lbGroupIngressRuleRequiresAdditionalCidrRules := func() bool {
 		if len(ic.Config.AWS.Subnets) == 0 {
@@ -213,15 +228,12 @@ func GenerateClusterAssets(ic *installconfig.InstallConfig, clusterID *installco
 		if ic.AWS.GetVpcIpv4Cidr() == machineConfigCidr {
 			return false
 		}
-		if strings.Contains(strings.Join(ic.AWS.GetVpcIpv4Cidrs(), ","), machineConfigCidr) {
-			return true
-		}
-		return false
+		return strings.Contains(strings.Join(ic.AWS.GetVpcIpv4Cidrs(), ","), machineConfigCidr)
 	}
 	if lbGroupIngressRuleRequiresAdditionalCidrRules() {
 		awsCluster.Spec.ControlPlaneLoadBalancer.IngressRules = append(awsCluster.Spec.ControlPlaneLoadBalancer.IngressRules, []capa.IngressRule{
 			{
-				Description: "Kubernetes API internal traffic from additional CIDR",
+				Description: "Kubernetes API internal traffic from additional VPC CIDR",
 				Protocol:    capa.SecurityGroupProtocolTCP,
 				FromPort:    6443,
 				ToPort:      6443,

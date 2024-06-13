@@ -24,6 +24,8 @@ type Metadata struct {
 	edgeSubnets       Subnets
 	vpc               string
 	instanceTypes     map[string]InstanceType
+	vpcPrimaryCidr    string
+	vpcIpv4Cidrs      []string
 
 	Region   string                     `json:"region,omitempty"`
 	Subnets  []string                   `json:"subnets,omitempty"`
@@ -186,9 +188,11 @@ func (m *Metadata) PublicSubnets(ctx context.Context) (Subnets, error) {
 
 // VPC retrieves the VPC ID containing PublicSubnets and PrivateSubnets.
 func (m *Metadata) VPC(ctx context.Context) (string, error) {
-	err := m.populateSubnets(ctx)
-	if err != nil {
+	if err := m.populateSubnets(ctx); err != nil {
 		return "", fmt.Errorf("error retrieving VPC: %w", err)
+	}
+	if err := m.populateVpcInformation(ctx); err != nil {
+		return "", fmt.Errorf("error gathering VPC information: %w", err)
 	}
 	return m.vpc, nil
 }
@@ -237,4 +241,56 @@ func (m *Metadata) InstanceTypes(ctx context.Context) (map[string]InstanceType, 
 	}
 
 	return m.instanceTypes, nil
+}
+
+// populateVpcInformation retrieves VPC by ID and save in the metadata.
+func (m *Metadata) populateVpcInformation(ctx context.Context) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	session, err := m.unlockedSession(ctx)
+	if err != nil {
+		return err
+	}
+
+	vpc, err := describeVpcByID(ctx, session, m.Region, m.vpc)
+	if err != nil {
+		return err
+	}
+
+	// Collecting any information it need
+	m.vpcPrimaryCidr = *vpc.CidrBlock
+	m.vpcIpv4Cidrs = append(m.vpcIpv4Cidrs, m.vpcPrimaryCidr)
+	if len(vpc.CidrBlockAssociationSet) > 0 {
+		for _, ass := range vpc.CidrBlockAssociationSet {
+			m.vpcIpv4Cidrs = append(m.vpcIpv4Cidrs, *ass.CidrBlock)
+		}
+	}
+
+	return nil
+}
+
+// initializeVPC checks if VPC ID has been discovered from metadata.
+func (m *Metadata) initializeVPC() bool {
+	if len(m.vpc) == 0 {
+		if _, err := m.VPC(context.TODO()); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// GetVpcIpv4Cidr returns IPv4 primary CIDR of VPC.
+func (m *Metadata) GetVpcIpv4Cidr() string {
+	if !m.initializeVPC() {
+		return ""
+	}
+	return m.vpcPrimaryCidr
+}
+
+// GetVpcIpv4Cidrs returns all IPv4 CIDR blocks associated to the VPC.
+func (m *Metadata) GetVpcIpv4Cidrs() []string {
+	if !m.initializeVPC() {
+		return []string{}
+	}
+	return m.vpcIpv4Cidrs
 }

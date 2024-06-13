@@ -50,3 +50,24 @@ func DescribePublicIpv4Pool(ctx context.Context, session *session.Session, regio
 	}
 	return poolOutputs.PublicIpv4Pools[0], nil
 }
+
+// describeVpcByID returns the VPC spec from metadata from a given VPC ID.
+func describeVpcByID(ctx context.Context, session *session.Session, region string, vpcID string) (*ec2.Vpc, error) {
+	client := ec2.New(session, aws.NewConfig().WithRegion(region))
+
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
+	vpcs, err := client.DescribeVpcsWithContext(cctx, &ec2.DescribeVpcsInput{VpcIds: []*string{aws.String(vpcID)}})
+	if err != nil {
+		return nil, err
+	}
+	if len(vpcs.Vpcs) == 0 {
+		return nil, fmt.Errorf("VPC ID %q not found", vpcID)
+	}
+	// it should not happen
+	if len(vpcs.Vpcs) > 1 {
+		return nil, fmt.Errorf("more than one VPC with ID %q", vpcID)
+	}
+	return vpcs.Vpcs[0], nil
+}
