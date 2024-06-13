@@ -267,7 +267,7 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	golang.org/x/tools v0.17.0 // indirect
+	golang.org/x/tools v0.18.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20240311173647-c811ad7063a7 // indirect
@@ -283,7 +283,7 @@ require (
 	k8s.io/cli-runtime v0.29.3 // indirect
 	k8s.io/cluster-bootstrap v0.29.3 // indirect
 	k8s.io/component-base v0.29.3 // indirect
-	k8s.io/kube-openapi v0.0.0-20240126223410-2919ad4fcfec // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	k8s.io/kubectl v0.29.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.16.0 // indirect
@@ -319,3 +319,6 @@ replace golang.org/x/oauth2 => golang.org/x/oauth2 v0.15.0
 replace google.golang.org/api => google.golang.org/api v0.157.0
 
 replace sigs.k8s.io/cluster-api-provider-openstack => github.com/openshift/cluster-api-provider-openstack v0.9.1-0.20240426092531-c42a4659d6c0
+
+// https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/5024 r4f4 fix-5023
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/r4f4/cluster-api-provider-aws/v2 v2.0.0-20240613194027-ce5aaf70a3a4

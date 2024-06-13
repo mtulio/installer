@@ -49,7 +49,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/cel-go v0.17.7 // indirect
+	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -71,7 +71,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.32.0 // indirect
 	github.com/openshift-online/ocm-common v0.0.0-20240129111424-ff8c6c11d909 // indirect
-	github.com/openshift-online/ocm-sdk-go v0.1.414 // indirect
+	github.com/openshift-online/ocm-sdk-go v0.1.422 // indirect
 	github.com/openshift/rosa v1.2.35-rc1.0.20240301152457-ad986cecd364 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.19.0 // indirect
@@ -121,11 +121,11 @@ require (
 	k8s.io/cluster-bootstrap v0.29.3 // indirect
 	k8s.io/component-base v0.29.3 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/aws-iam-authenticator v0.6.13 // indirect
-	sigs.k8s.io/cluster-api v1.7.0 // indirect
+	sigs.k8s.io/cluster-api v1.7.1 // indirect
 	sigs.k8s.io/controller-runtime v0.17.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 // indirect
@@ -142,3 +142,6 @@ replace (
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
 )
+
+// https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/5024
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/r4f4/cluster-api-provider-aws/v2 v2.0.0-20240613194027-ce5aaf70a3a4
