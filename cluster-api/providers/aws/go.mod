@@ -79,11 +79,11 @@ require (
 	github.com/prometheus/procfs v0.13.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
-	github.com/spf13/cobra v1.8.0 // indirect
+	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/vincent-petithory/dataurl v1.0.0 // indirect
-	github.com/zgalor/weberr v0.6.0 // indirect
+	github.com/zgalor/weberr v0.8.2 // indirect
 	gitlab.com/c0b/go-ordered-json v0.0.0-20171130231205-49bbdab258c2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.0 // indirect
 	go.opentelemetry.io/otel v1.22.0 // indirect
@@ -100,7 +100,7 @@ require (
 	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/oauth2 v0.19.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
@@ -139,3 +139,9 @@ replace (
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.1
 )
+
+// mtulio spike-byo-eip
+//replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 spike-byo-eip
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240829200812-300a060e1d40
+
+//replace sigs.k8s.io/cluster-api-provider-aws/v2 => /home/mtulio/go/src/github.com/mtulio/cluster-api-provider-aws

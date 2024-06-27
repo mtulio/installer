@@ -95,7 +95,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0
 	github.com/shurcooL/vfsgen v0.0.0-20181202132449-6a9ea43bcacd
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/thedevsaddam/retry v0.0.0-20200324223450-9769a859cc6d
 	github.com/ulikunitz/xz v0.5.12
@@ -321,3 +321,9 @@ replace github.com/openshift/assisted-service/models => github.com/openshift/ass
 // https://issues.redhat.com/browse/OCPBUGS-8119
 // https://issues.redhat.com/browse/OCPBUGS-27507
 replace github.com/containerd/containerd => github.com/containerd/containerd v1.6.26
+
+// mtulio: spike-byo-eip
+//replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 spike-byo-eip
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/mtulio/cluster-api-provider-aws/v2 v2.0.0-20240829200812-300a060e1d40
+
+//replace sigs.k8s.io/cluster-api-provider-aws/v2 => /home/mtulio/go/src/github.com/mtulio/cluster-api-provider-aws
