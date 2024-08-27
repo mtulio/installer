@@ -388,6 +388,13 @@ type IPAMPool struct {
 	NetmaskLength int64 `json:"netmaskLength,omitempty"`
 }
 
+// VpcCidrBlock defines the CIDR block and settings to associate with the managed VPC. Currently, only IPv4 is supported.
+type VpcCidrBlock struct {
+	// IPv4CidrBlock is the IPv4 CIDR block to associate with the managed VPC.
+	// +kubebuilder:validation:MinLength=1
+	IPv4CidrBlock string `json:"ipv4CidrBlock"`
+}
+
 // VPCSpec configures an AWS VPC.
 type VPCSpec struct {
 	// ID is the vpc-id of the VPC this provider should use to create resources.
@@ -397,6 +404,12 @@ type VPCSpec struct {
 	// Defaults to 10.0.0.0/16.
 	// Mutually exclusive with IPAMPool.
 	CidrBlock string `json:"cidrBlock,omitempty"`
+
+	// SecondaryCidrBlocks are additional CIDR blocks to be associated when the provider creates a managed VPC.
+	// Defaults to none. Mutually exclusive with IPAMPool. This makes sense to use if, for example, you want to use
+	// a separate IP range for pods (e.g. Cilium ENI mode).
+	// +optional
+	SecondaryCidrBlocks []VpcCidrBlock `json:"secondaryCidrBlocks,omitempty"`
 
 	// IPAMPool defines the IPAMv4 pool to be used for VPC.
 	// Mutually exclusive with CidrBlock.
@@ -1073,12 +1086,6 @@ type ElasticIPPool struct {
 	// +kubebuilder:validation:Enum:=amazon-pool;none
 	// +optional
 	PublicIpv4PoolFallBackOrder *PublicIpv4PoolFallbackOrder `json:"publicIpv4PoolFallbackOrder,omitempty"`
-
-	// TODO(mtulio): add future support of user-defined Elastic IP to allow users to assign BYO Public IP from
-	// 'static'/preallocated amazon-provided IPsstrucute currently holds only 'BYO Public IP from Public IPv4 Pool' (user brought to AWS),
-	// although a dedicated structure would help to hold 'BYO Elastic IP' variants like:
-	// - AllocationIdPoolApiLoadBalancer: an user-defined (static) IP address to the Public API Load Balancer.
-	// - AllocationIdPoolNatGateways: an user-defined (static) IP address to allocate to NAT Gateways (egress traffic).
 }
 
 // PublicIpv4PoolFallbackOrder defines the list of available fallback action when the PublicIpv4Pool is exhausted.

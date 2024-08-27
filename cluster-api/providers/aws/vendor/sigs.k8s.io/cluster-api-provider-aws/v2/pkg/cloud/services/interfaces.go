@@ -81,8 +81,8 @@ type EC2Interface interface {
 	LaunchTemplateNeedsUpdate(scope scope.LaunchTemplateScope, incoming *expinfrav1.AWSLaunchTemplate, existing *expinfrav1.AWSLaunchTemplate) (bool, error)
 	DeleteBastion() error
 	ReconcileBastion() error
-	// ReconcileElasticIPFromPublicPool reconciles the elastic IP from a custom Public IPv4 Pool.
-	ReconcileElasticIPFromPublicPool(pool *infrav1.ElasticIPPool, instance *infrav1.Instance) error
+	// ReconcileElasticIP reconciles the Elastic IP from a BYO address, pre-allocated or custom Public IPv4 Pool.
+	ReconcileElasticIP(pool *infrav1.ElasticIPPool, instance *infrav1.Instance) (bool, error)
 
 	// ReleaseElasticIP reconciles the elastic IP from a custom Public IPv4 Pool.
 	ReleaseElasticIP(instanceID string) error

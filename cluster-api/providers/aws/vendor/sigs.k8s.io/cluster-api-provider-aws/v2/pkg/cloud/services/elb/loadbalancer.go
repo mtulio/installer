@@ -349,10 +349,10 @@ func (s *Service) getAPIServerLBSpec(elbName string, lbSpec *infrav1.AWSLoadBala
 		}
 	} else {
 		// The load balancer APIs require us to only attach one subnet for each AZ.
-		subnets := s.scope.Subnets().FilterPrivate()
+		subnets := s.scope.Subnets().FilterPrivate().FilterNonCni()
 
 		if scheme == infrav1.ELBSchemeInternetFacing {
-			subnets = s.scope.Subnets().FilterPublic()
+			subnets = s.scope.Subnets().FilterPublic().FilterNonCni()
 		}
 
 	subnetLoop:
@@ -400,7 +400,7 @@ func (s *Service) createLB(spec *infrav1.LoadBalancer, lbSpec *infrav1.AWSLoadBa
 	// set in the VpcSpec.ElasticIPPool.PublicIPv4Pool to allow Elastic IP be consumed from
 	// public ip address of user-provided CIDR blocks.
 	if spec.Scheme == infrav1.ELBSchemeInternetFacing {
-		if err := s.allocatePublicIpv4AddressFromByoIPPool(input); err != nil {
+		if err := s.allocatePublicIpv4Address(input); err != nil {
 			return nil, fmt.Errorf("failed to allocate addresses to load balancer: %w", err)
 		}
 	}
@@ -1102,10 +1102,10 @@ func (s *Service) getAPIServerClassicELBSpec(elbName string) (*infrav1.LoadBalan
 		}
 	} else {
 		// The load balancer APIs require us to only attach one subnet for each AZ.
-		subnets := s.scope.Subnets().FilterPrivate()
+		subnets := s.scope.Subnets().FilterPrivate().FilterNonCni()
 
 		if scheme == infrav1.ELBSchemeInternetFacing {
-			subnets = s.scope.Subnets().FilterPublic()
+			subnets = s.scope.Subnets().FilterPublic().FilterNonCni()
 		}
 
 	subnetLoop:

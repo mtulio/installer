@@ -408,3 +408,11 @@ func (m *MachineScope) GetElasticIPPool() *infrav1.ElasticIPPool {
 	}
 	return m.AWSMachine.Spec.ElasticIPPool
 }
+
+// HasPublicIP returns the public IP state of the machine scope.
+func (m *MachineScope) HasPublicIP() bool {
+	if m.AWSMachine.Spec.PublicIP == nil {
+		return false
+	}
+	return *m.AWSMachine.Spec.PublicIP
+}
