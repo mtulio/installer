@@ -13,11 +13,17 @@ import (
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/installconfig"
 	awsconfig "github.com/openshift/installer/pkg/asset/installconfig/aws"
+
+	// capa "github.com/openshift/installer/pkg/infrastructure/aws/clusterapi"
 	"github.com/openshift/installer/pkg/types"
 	"github.com/openshift/installer/pkg/types/aws"
 )
 
-const awsPolicyFilename = "aws-permissions-policy-creds.json"
+const (
+	awsPolicyFileNamePrincipal = "aws-permissions-policy-creds.json"
+	// awsPolicyFileNameMaster    = "aws-permissions-policy-master-role.json"
+	// awsPolicyFileNameWorker    = "aws-permissions-policy-worker-role.json"
+)
 
 // Permissions has the permissions needed for a given cluster configuration.
 type Permissions struct {
@@ -58,9 +64,15 @@ func (o *Permissions) Generate(ctx context.Context, dependencies asset.Parents) 
 			// Include permissions needed by CCO/cluster for mint creds mode
 			reqGroups = append(reqGroups, awsconfig.PermissionMintCreds)
 		}
-		if err := o.writePolicy(reqGroups, awsPolicyFilename); err != nil {
+		if err := o.writePolicy(reqGroups, awsPolicyFileNamePrincipal); err != nil {
 			return fmt.Errorf("failed to generate credentials permissions: %w", err)
 		}
+		// if err := o.writePolicy(capa.GetIamPolicyMasterRole(), awsPolicyFileNameMaster); err != nil {
+		// 	return fmt.Errorf("failed to generate credentials permissions to master-role: %w", err)
+		// }
+		// if err := o.writePolicy(capa.GetIamPolicyWorkerRole(), awsPolicyFileNameWorker); err != nil {
+		// 	return fmt.Errorf("failed to generate credentials permissions to worker-role: %w", err)
+		// }
 	default:
 		return fmt.Errorf("platform %q does not support fine-grained permissions", platform)
 	}

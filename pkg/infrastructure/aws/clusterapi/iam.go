@@ -269,3 +269,11 @@ func getPartitionService(region string) string {
 	}
 	return fmt.Sprintf("ec2.%s", partitionDNSSuffix)
 }
+
+func GetIamPolicyMasterRole() *iamv1.PolicyDocument {
+	return policies["master"]
+}
+
+func GetIamPolicyWorkerRole() *iamv1.PolicyDocument {
+	return policies["worker"]
+}

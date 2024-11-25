@@ -4,6 +4,7 @@ package aws
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -443,6 +444,11 @@ func ValidateCreds(ssn *session.Session, groups []PermissionGroup, region string
 	canInstall, err := ccaws.CheckPermissionsAgainstActions(client, requiredPermissions, sParams, logger)
 	if err != nil {
 		return fmt.Errorf("checking install permissions: %w", err)
+	}
+	// Opt to split permission checks to BYO minimum permissions.
+	if os.Getenv("OPENSHIFT_INSTALL_SKIP_PERMISSION_CHECK") == "true" {
+		logger.Warn("Skipping permissions check: THIS IS NOT ADVISED! =]")
+		return nil
 	}
 	if !canInstall {
 		return errors.New("current credentials insufficient for performing cluster installation")
