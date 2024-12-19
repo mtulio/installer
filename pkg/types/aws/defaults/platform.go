@@ -6,6 +6,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/installer/pkg/types"
 	"github.com/openshift/installer/pkg/types/aws"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -23,6 +24,11 @@ var (
 			// Example region default machine class override for ARM64:
 			// "us-east-1":      {"m6g.xlarge", "m6gd.xlarge"},
 		},
+	}
+	// us-east-1e is a well-known limited zone. Create base infra (networking),
+	// is useless as it does not offer supported instance types.
+	skippedZonesByRegion = map[string][]string{
+		"us-east-1": {"us-east-1e"},
 	}
 )
 
@@ -71,4 +77,15 @@ func InstanceTypes(region string, arch types.Architecture, topology configv1.Top
 			"r5.2xlarge",
 		}
 	}
+}
+
+// SkippedZones returns the list of supported zones.
+func SkippedZones(region string, zones []string) []string {
+	skipZones, ok := skippedZonesByRegion[region]
+	if (!ok) || (len(skipZones) == 0) {
+		return zones
+	}
+	zoneSet := sets.New[string](zones...)
+	skipSet := sets.New[string](skipZones...)
+	return sets.List(zoneSet.Difference(skipSet.Insert(skipZones...)))
 }
