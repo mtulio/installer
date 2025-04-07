@@ -423,6 +423,11 @@ func validateNetworking(n *types.Networking, fldPath *field.Path) field.ErrorLis
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("networkType"), n.NetworkType, "networkType OpenShiftSDN is not supported, please use OVNKubernetes"))
 	}
 
+	// Stop when string does not match exaclty with OVKKubernetes
+	if strings.EqualFold(n.NetworkType, string(operv1.NetworkTypeOVNKubernetes)) && n.NetworkType != string(operv1.NetworkTypeOVNKubernetes) {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("networkType"), n.NetworkType, fmt.Sprintf("only networkType %s is valid", operv1.NetworkTypeOVNKubernetes)))
+	}
+
 	if len(n.MachineNetwork) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("machineNetwork"), "at least one machine network is required"))
 	}
