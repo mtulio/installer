@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/cluster/aws"
 	"github.com/openshift/installer/pkg/asset/cluster/azure"
@@ -24,6 +25,7 @@ import (
 	"github.com/openshift/installer/pkg/asset/cluster/vsphere"
 	"github.com/openshift/installer/pkg/asset/ignition/bootstrap"
 	"github.com/openshift/installer/pkg/asset/installconfig"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 	"github.com/openshift/installer/pkg/types"
 	awstypes "github.com/openshift/installer/pkg/types/aws"
 	azuretypes "github.com/openshift/installer/pkg/types/azure"
@@ -64,7 +66,7 @@ func (m *Metadata) Dependencies() []asset.Asset {
 }
 
 // Generate generates the metadata asset.
-func (m *Metadata) Generate(_ context.Context, parents asset.Parents) (err error) {
+func (m *Metadata) Generate(ctx context.Context, parents asset.Parents) (err error) {
 	clusterID := &installconfig.ClusterID{}
 	installConfig := &installconfig.InstallConfig{}
 	parents.Get(clusterID, installConfig)
@@ -116,6 +118,17 @@ func (m *Metadata) Generate(_ context.Context, parents asset.Parents) (err error
 		// existing External install -- which provisions nothing and has
 		// nothing to record.
 		if installConfig.Config.Platform.External.ProvisionsWithClusterAPI() {
+			// The payload is normally already resolved by the time this runs,
+			// but not always: when the manifests were created by an earlier
+			// command the asset that resolves it is restored from state
+			// instead of regenerated. Asking again is cheap -- the result is
+			// cached for the process and the extraction for the directory --
+			// and the alternative is metadata.json recording no provider
+			// binary, which is a cluster `destroy cluster` cannot remove.
+			if _, err := payload.ResolveForInstallConfig(ctx, installConfig.Config,
+				command.RootOpts.Dir, clusterID.InfraID); err != nil {
+				return fmt.Errorf("failed to resolve the Cluster API provider payload: %w", err)
+			}
 			metadata.ClusterPlatformMetadata.External = external.Metadata(installConfig.Config)
 		}
 	case nonetypes.Name:

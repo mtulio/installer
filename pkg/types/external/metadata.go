@@ -69,6 +69,33 @@ type ClusterAPIMetadata struct {
 	// +optional
 	Args []string `json:"args,omitempty"`
 
+	// Image is the provider payload image the artifacts above were extracted
+	// from, and ImageDigest is what that reference resolved to at install
+	// time. Both are empty for an install from local paths.
+	//
+	// Neither is used to pull anything during destroy. BinaryPath and
+	// ComponentsPath point inside the install directory, so the payload is
+	// already there; these are recorded so that a support case can tell which
+	// build of a partner's provider a cluster was created by, which a tagged
+	// reference alone cannot answer.
+	// +optional
+	Image string `json:"image,omitempty"`
+	// +optional
+	ImageDigest string `json:"imageDigest,omitempty"`
+
+	// HookRoot is the directory, relative to the install directory, that the
+	// pre-destroy hook's Program is resolved against. Empty means the External
+	// manifest directory, which is where a hook named in the install-config
+	// lives.
+	//
+	// It is recorded because a payload's hooks live in the extracted payload
+	// instead, and `destroy cluster` has no install-config and no payload
+	// descriptor to work that out from. It covers pre-destroy only -- each
+	// hook's root follows the origin of that hook, and pre-destroy is the one
+	// hook that still has to run after this file is written.
+	// +optional
+	HookRoot string `json:"hookRoot,omitempty"`
+
 	// Hooks are the programs the install was configured to run, repeated here
 	// for the same reason as Args: `destroy cluster` has to run the teardown
 	// counterpart of whatever provisioning hook created resources, and the

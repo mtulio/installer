@@ -153,9 +153,14 @@ func (u *ClusterUninstaller) runPreDestroyHook(ctx context.Context, restored, cl
 	hook := meta.ClusterAPI.Hooks.PreDestroy
 
 	req := hooks.Request{
-		Kind:        hooks.PreDestroy,
-		Program:     hook.Program,
-		Args:        hook.Args,
+		Kind:    hooks.PreDestroy,
+		Program: hook.Program,
+		Args:    hook.Args,
+		// Recorded at install time because it differs by mode and there is
+		// nothing here to work it out from: a hook from a provider payload
+		// lives in the extracted payload, not in the External manifest
+		// directory, and the install-config that would have said so is gone.
+		ProgramRoot: meta.ClusterAPI.HookRoot,
 		InstallDir:  u.Dir,
 		InfraID:     u.Metadata.InfraID,
 		ClusterName: u.Metadata.ClusterName,
