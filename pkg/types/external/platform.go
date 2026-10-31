@@ -68,29 +68,174 @@ type ClusterAPIProvider struct {
 	// BinaryPath is a path on the machine running the installer to the provider
 	// controller executable.
 	//
-	// Remote references -- a git repository, a container image, or a release
-	// payload -- are not supported, and neither is digest or signature pinning.
-	// Both are TBD after the pilot: the provider artifacts must already be
-	// extracted onto this machine.
-	BinaryPath string `json:"binaryPath"`
+	// Required when the provider is supplied as local paths, which is the
+	// default. It must not be set when Controller.SourceType is "image": the
+	// payload supplies the controller, and mixing the two would make it
+	// ambiguous which binary runs.
+	// +optional
+	BinaryPath string `json:"binaryPath,omitempty"`
 
 	// ComponentsPath is a path on the machine running the installer to the
 	// provider's CRDs and component manifests, either a single YAML file or a
 	// directory of them.
 	//
-	// Remote references and digest pinning are TBD after the pilot, as for
-	// BinaryPath.
-	ComponentsPath string `json:"componentsPath"`
+	// Required when the provider is supplied as local paths, and must not be
+	// set when Controller.SourceType is "image", as for BinaryPath.
+	// +optional
+	ComponentsPath string `json:"componentsPath,omitempty"`
 
 	// Args are appended to the provider controller's command line, after the
 	// arguments the installer supplies itself. Use it for flags a particular
 	// provider requires and the installer does not know about.
+	//
+	// This is the original spelling and continues to work. Controller.Args is
+	// the same setting in the newer, grouped form; setting both is an error
+	// rather than a merge, because two places to write one list is how the two
+	// silently drift apart.
 	// +optional
 	Args []string `json:"args,omitempty"`
 
 	// Hooks names programs the installer runs at fixed points in the install.
 	// +optional
 	Hooks *Hooks `json:"hooks,omitempty"`
+
+	// Controller selects where the provider controller comes from.
+	//
+	// When it is unset, or its SourceType is "local", the installer reads
+	// BinaryPath and ComponentsPath and behaves exactly as it did before this
+	// field existed. When SourceType is "image", every artifact instead comes
+	// out of one OCI image published by the provider, and no local path is
+	// consulted.
+	//
+	// The two are modes of one field set rather than two field sets, so a user
+	// moving between them changes SourceType and the artifacts, not the shape
+	// of their configuration.
+	// +optional
+	Controller *Controller `json:"controller,omitempty"`
+
+	// CapiInstallerPath is the directory the provider payload is extracted
+	// into, and the root every other path below is resolved against.
+	//
+	// Defaults to the "capi-installer" directory of the install directory.
+	// Only meaningful when Controller.SourceType is "image".
+	// +optional
+	CapiInstallerPath string `json:"capiInstallerPath,omitempty"`
+
+	// CustomResource is the single bundle manifest the local Cluster API
+	// control plane loads -- the provider's CRDs and webhook configurations.
+	//
+	// A single file rather than a directory, because every clusterctl provider
+	// already publishes exactly one infrastructure-components.yaml. Defaults
+	// to what the payload's own layout declares, so a conforming payload needs
+	// no path configuration at all.
+	// +optional
+	CustomResource string `json:"customResource,omitempty"`
+
+	// ManifestPath is the directory of day-0 manifest templates the installer
+	// renders and folds into the install directory's manifests, to be applied
+	// during bootstrap.
+	//
+	// Defaults to what the payload's layout declares. These reach the
+	// installed cluster, unlike the Cluster API templates alongside them,
+	// which are applied only to the installer's local, ephemeral control
+	// plane.
+	// +optional
+	ManifestPath string `json:"manifestPath,omitempty"`
+
+	// Variables supply values for the substitution tokens in the payload's
+	// template trees. The installer uses clusterctl's syntax -- ${VAR},
+	// ${VAR=default} and ${VAR:="default"} -- so that a provider maintains one
+	// template dialect across their upstream and their OpenShift artifacts.
+	//
+	// Names beginning with "INSTALLER_" are reserved: the installer supplies
+	// that set itself, and setting one here is an error. The prefix is what
+	// lets the installer's namespace and the provider's grow independently
+	// without colliding inside the same file.
+	//
+	// A token the templates use, that has no default and that nothing here
+	// resolves, fails validation before any cloud call -- consistent with
+	// clusterctl's own behaviour on an unset required variable.
+	//
+	// Do not put a credential in one. These are recorded in the install log.
+	// +optional
+	Variables map[string]string `json:"variables,omitempty"`
+}
+
+// ControllerSourceType selects where the provider's artifacts come from.
+type ControllerSourceType string
+
+const (
+	// ControllerSourceTypeLocal reads the controller and its components from
+	// paths on the machine running the installer. This is the default and is
+	// the behaviour that existed before payload images were supported.
+	ControllerSourceTypeLocal ControllerSourceType = "local"
+
+	// ControllerSourceTypeImage reads every artifact from an OCI image the
+	// provider publishes through their own release process.
+	ControllerSourceTypeImage ControllerSourceType = "image"
+)
+
+// Controller describes the provider controller and where it is obtained from.
+//
+// The installer validates the payload's structure, not its content: it checks
+// that the declared layout is present and that the declared compatibility
+// range admits this release. It does not inspect, scan or attest the
+// controller, the manifests or the hooks. What is inside is established by the
+// provider's release process, which is the trust boundary.
+type Controller struct {
+	// SourceType is "local" or "image", and exactly one set of fields applies
+	// to each. It defaults to "local".
+	// +kubebuilder:validation:Enum=local;image
+	// +kubebuilder:default:="local"
+	// +default="local"
+	// +optional
+	SourceType ControllerSourceType `json:"sourceType,omitempty"`
+
+	// Image is the payload image reference, required when SourceType is
+	// "image" and rejected otherwise.
+	//
+	// The reference must be fully qualified. A tag is accepted for a connected
+	// install: the install log records the resolved digest and the artifact
+	// checksum, so a tagged install stays traceable after the fact even though
+	// it is not reproducible from the install-config alone. A mirrored install
+	// must pin a digest, because imageDigestSources redirects by digest.
+	//
+	// Authentication reuses pullSecret and redirection reuses
+	// imageDigestSources. Neither needs a new field here.
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// Path is an alternative spelling of BinaryPath for SourceType "local",
+	// so that a local configuration can be written in the same grouped form as
+	// an image one. Setting both is an error.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// Args are appended to the controller's command line, after the arguments
+	// the installer supplies itself. Equivalent to ClusterAPIProvider.Args;
+	// setting both is an error.
+	// +optional
+	Args []string `json:"args,omitempty"`
+}
+
+// SourceTypeOrDefault reports the configured source type, treating an unset
+// Controller and an unset SourceType as "local".
+//
+// Every caller that has to tell the two modes apart goes through this, for the
+// same reason ProvisionsWithClusterAPI exists: the pre-existing local-path
+// behaviour has to survive unchanged, and it only does if the condition cannot
+// drift between call sites.
+func (c *Controller) SourceTypeOrDefault() ControllerSourceType {
+	if c == nil || c.SourceType == "" {
+		return ControllerSourceTypeLocal
+	}
+	return c.SourceType
+}
+
+// UsesImagePayload reports whether the provider's artifacts come from an OCI
+// image rather than from local paths. A nil receiver reports false.
+func (p *ClusterAPIProvider) UsesImagePayload() bool {
+	return p != nil && p.Controller.SourceTypeOrDefault() == ControllerSourceTypeImage
 }
 
 // Hooks names programs the installer runs at points in the flow where an

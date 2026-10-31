@@ -27,6 +27,24 @@ const ManifestDir string = "external-install"
 // stage, after the infrastructure reports ready.
 const MachineManifestDir string = "machines"
 
+// CapiInstallerDir is the default directory, inside the install directory,
+// that a provider payload image is extracted into. Every path the payload
+// declares is resolved against it.
+//
+// It is a sibling of ManifestDir rather than a subdirectory of it because the
+// two have different owners and different lifetimes: ManifestDir is written
+// by the user and travels with the install directory, while this one is
+// unpacked by the installer from an artifact the provider published and can
+// be deleted and re-extracted at any time.
+const CapiInstallerDir string = "capi-installer"
+
+// PayloadDescriptorFile is the OpenShift-specific descriptor at the root of a
+// provider payload. It is the companion of clusterctl's own metadata.yaml:
+// that file declares which Cluster API contract the provider implements, and
+// this one declares the Kubernetes compatibility range and the payload's
+// layout, neither of which has an upstream equivalent.
+const PayloadDescriptorFile string = "openshift.yaml"
+
 // ExtraManifestDir is the subdirectory of ManifestDir holding cluster
 // manifests the user wants applied during bootstrap, ahead of anything an
 // operator does.
