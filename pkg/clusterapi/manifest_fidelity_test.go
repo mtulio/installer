@@ -2,8 +2,6 @@ package clusterapi
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"testing"
 
@@ -202,48 +200,18 @@ spec:
 	}
 }
 
-// TestPublishedExampleManifestsDoNotDropFields runs the same check against
-// the example manifests this repository publishes, so drift in a file a
-// partner is told to copy is caught here rather than by the partner.
+// A second test here used to run the same fidelity check against the example
+// manifests shipped in this repository, by globbing
+// upi/external/examples/*/external-install/cluster.yaml.
 //
-// It used to read the pilot's own working copy from a sibling workspace
-// directory and skip when that was absent, which meant it never ran anywhere
-// but one laptop. The examples are in the repository and are the artifact
-// that matters.
-func TestPublishedExampleManifestsDoNotDropFields(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "upi", "external", "examples", "*", "external-install", "cluster.yaml"))
-	require.NoError(t, err)
-	require.NotEmpty(t, paths, "no published example cluster.yaml found")
-
-	for _, path := range paths {
-		t.Run(filepath.Base(filepath.Dir(filepath.Dir(path))), func(t *testing.T) {
-			checkManifestFidelity(t, path)
-		})
-	}
-}
-
-func checkManifestFidelity(t *testing.T, path string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-
-	decoded, err := ObjectsFromManifest(path, data)
-	require.NoError(t, err)
-	require.NotEmpty(t, decoded)
-
-	for _, d := range decoded {
-		var want map[string]interface{}
-		require.NoError(t, yaml.Unmarshal(d.Data, &want))
-
-		rt, err := yaml.Marshal(d.Object)
-		require.NoError(t, err)
-		var got map[string]interface{}
-		require.NoError(t, yaml.Unmarshal(rt, &got))
-
-		kind, _ := want["kind"].(string)
-		delete(want, "apiVersion")
-		delete(want, "kind")
-
-		assert.Empty(t, droppedPaths(want, got, kind), "%s: fields dropped by decode", kind)
-	}
-}
+// Those examples are no longer in this repository: commit 17ba290f47 moved
+// them to openshift-splat-team/installer-labs, under external-capi/examples/.
+// A test in the installer cannot glob another repository's working tree
+// without reintroducing exactly the defect it was written to remove -- it
+// originally read a sibling workspace directory and skipped when absent,
+// so it never ran anywhere but one laptop.
+//
+// TestObjectsFromManifestDoesNotDropFields above covers the decode path
+// itself with inline fixtures, which is the part that lives here. Checking
+// the published examples against it belongs to whatever gates
+// installer-labs, not to this package.
