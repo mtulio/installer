@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 	"github.com/openshift/installer/pkg/types/external"
 )
 
@@ -94,7 +95,7 @@ func TestValidatePlatform(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			errs := ValidatePlatform(tc.platform, field.NewPath("test-path"))
+			errs := ValidatePlatform(tc.platform, field.NewPath("test-path"), nil)
 			assert.Len(t, errs, len(tc.expected))
 			for i, want := range tc.expected {
 				assert.Regexp(t, want, errs[i].Error())
@@ -162,11 +163,27 @@ func TestValidateHooks(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			errs := ValidatePlatform(provider(tc.hooks), field.NewPath("test-path"))
+			errs := ValidatePlatform(provider(tc.hooks), field.NewPath("test-path"), nil)
 			assert.Len(t, errs, len(tc.expected))
 			for i, want := range tc.expected {
 				assert.Regexp(t, want, errs[i].Error())
 			}
 		})
+	}
+}
+
+// TestVariablePrefixMatchesPayload holds the two spellings of the reserved
+// variable prefix together.
+//
+// They are deliberately separate constants -- see payloadInstallerVariablePrefix
+// for why -- and the cost of that choice is that nothing but this test stops
+// them drifting. Drift would be quiet and bad in one direction: validation
+// would accept a variable the renderer then refuses to use, and the install
+// would fail at render time with a message about a reserved name the user was
+// told was fine.
+func TestVariablePrefixMatchesPayload(t *testing.T) {
+	if payloadInstallerVariablePrefix != payload.InstallerVariablePrefix {
+		t.Errorf("validation reserves %q but the renderer supplies %q; the two must be the same string",
+			payloadInstallerVariablePrefix, payload.InstallerVariablePrefix)
 	}
 }

@@ -134,7 +134,7 @@ func TestInstallConfigSnippet(t *testing.T) {
 
 			// Shape validation must pass too, or the user gets to the next
 			// error rather than to an install.
-			assert.Empty(t, externalvalidation.ValidatePlatform(ic.Platform.External, field.NewPath("platform", "external")))
+			assert.Empty(t, externalvalidation.ValidatePlatform(ic.Platform.External, field.NewPath("platform", "external"), &ic))
 		})
 	}
 }
