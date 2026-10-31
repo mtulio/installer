@@ -29,8 +29,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck //CORS-3563
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/clusterapi"
 	infracapi "github.com/openshift/installer/pkg/infrastructure/clusterapi"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 	externaltypes "github.com/openshift/installer/pkg/types/external"
 )
 
@@ -342,12 +344,29 @@ func (p Provider) PreProvision(ctx context.Context, in infracapi.PreProvisionInp
 			externaltypes.Name)
 	}
 
-	if err := clusterapi.SetExternalProvider(&clusterapi.ExternalProviderSpec{
+	spec := &clusterapi.ExternalProviderSpec{
 		Name:           capi.Name,
 		BinaryPath:     capi.BinaryPath,
 		ComponentsPath: capi.ComponentsPath,
 		Args:           capi.Args,
-	}); err != nil {
+	}
+
+	// In image mode none of the three paths above is configured -- validation
+	// rejects a local path there -- and they come from the payload instead.
+	// The payload has already been resolved by this point, by whichever
+	// earlier stage needed it first; this call collects that answer rather
+	// than producing a second one.
+	res, err := payload.ResolveForInstallConfig(ctx, in.InstallConfig.Config, command.RootOpts.Dir, in.InfraID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve the Cluster API provider payload: %w", err)
+	}
+	if res != nil {
+		spec.BinaryPath = res.ControllerPath
+		spec.ComponentsPath = res.ComponentsPath
+		spec.Args = res.Args
+	}
+
+	if err := clusterapi.SetExternalProvider(spec); err != nil {
 		return fmt.Errorf("failed to configure the %s Cluster API infrastructure provider: %w", capi.Name, err)
 	}
 	return nil

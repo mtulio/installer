@@ -74,9 +74,20 @@ type Request struct {
 	// Kind is the hook being run.
 	Kind Kind
 
-	// Program is the path to the executable, relative to the External
-	// manifest directory inside InstallDir.
+	// Program is the path to the executable, relative to ProgramRoot inside
+	// InstallDir.
 	Program string
+
+	// ProgramRoot is the directory, relative to InstallDir, that Program is
+	// resolved against. Empty means the External manifest directory, which is
+	// where a hook the user configured lives.
+	//
+	// It is a field rather than a constant because a provider payload brings
+	// its own hooks, and those are rooted at the directory the payload was
+	// extracted into. The containment rule does not change -- a program must
+	// still stay inside its root, and the root inside the install directory --
+	// only what the root is.
+	ProgramRoot string
 
 	// Args is the program's argv, verbatim from the install-config. The
 	// installer does not interpret it -- see externaltypes.Hook for why the
@@ -153,7 +164,7 @@ func Run(ctx context.Context, req Request) error {
 		return fmt.Errorf("failed to resolve the install directory %s: %w", req.InstallDir, err)
 	}
 
-	program, err := resolveProgram(installDir, req.Program)
+	program, err := resolveProgram(installDir, req.ProgramRoot, req.Program)
 	if err != nil {
 		return err
 	}
@@ -288,7 +299,7 @@ func formatArgs(args []string) string {
 }
 
 // resolveProgram turns the configured relative path into an absolute one,
-// refusing anything that leaves the install directory or is not executable.
+// refusing anything that leaves its root or is not executable.
 //
 // installDir must already be absolute. The result is handed to exec.Cmd whose
 // Dir is that same directory, and a relative result would then be resolved
@@ -298,24 +309,35 @@ func formatArgs(args []string) string {
 // filesystem, and because this is the last moment before the program runs --
 // a hook that was executable when the install-config was validated and is not
 // now should fail with the same message.
-func resolveProgram(installDir, program string) (string, error) {
+func resolveProgram(installDir, root, program string) (string, error) {
 	if program == "" {
 		return "", fmt.Errorf("no hook program configured")
+	}
+	if root == "" {
+		root = externaltypes.ManifestDir
+	}
+	// The root is localized for the same reason the program is: it reaches
+	// here from a payload's own layout by way of metadata.json, so it is not
+	// the installer's own string by the time destroy reads it back.
+	localRoot, err := filepath.Localize(root)
+	if err != nil {
+		return "", fmt.Errorf("the hook directory %q must be a relative path inside the install directory: %w",
+			root, err)
 	}
 
 	local, err := filepath.Localize(program)
 	if err != nil {
 		return "", fmt.Errorf("hook %q must be a relative path inside the %q directory: %w",
-			program, externaltypes.ManifestDir, err)
+			program, localRoot, err)
 	}
-	path := filepath.Join(installDir, externaltypes.ManifestDir, local)
+	path := filepath.Join(installDir, localRoot, local)
 
 	info, err := os.Stat(path)
 	switch {
 	case os.IsNotExist(err):
 		return "", fmt.Errorf("hook %s does not exist: it is named in "+
-			"platform.external.clusterAPI.hooks and is expected at that path, relative to the %q directory "+
-			"of the install directory", path, externaltypes.ManifestDir)
+			"platform.external.clusterAPI.hooks or in the provider payload's layout and is expected at that "+
+			"path, relative to the %q directory of the install directory", path, localRoot)
 	case err != nil:
 		return "", fmt.Errorf("failed to read the hook %s: %w", path, err)
 	case info.IsDir():

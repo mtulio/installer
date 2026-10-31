@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/installer/pkg/asset/manifests/capiutils"
 	infracapi "github.com/openshift/installer/pkg/infrastructure/clusterapi"
 	"github.com/openshift/installer/pkg/infrastructure/external/hooks"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 	externaltypes "github.com/openshift/installer/pkg/types/external"
 )
 
@@ -73,6 +74,7 @@ func buildRequest(
 		Kind:                     kind,
 		Program:                  hook.Program,
 		Args:                     hook.Args,
+		ProgramRoot:              hookRoot(kind),
 		InstallDir:               command.RootOpts.Dir,
 		InfraID:                  infraID,
 		ClusterName:              ic.Config.ObjectMeta.Name,
@@ -99,8 +101,18 @@ func buildRequest(
 	return req, nil
 }
 
-// configuredHooks returns the hooks the install-config names, or nil.
+// configuredHooks returns the hooks that will run, or nil.
+//
+// A provider payload declares its own, and a payload that ships a hook is the
+// ordinary case for this mode: the hook is the half of the provider's
+// integration that Cluster API has no contract for, so shipping the controller
+// without it would be shipping half an answer. The resolution has already
+// decided how a payload's declaration and the install-config's combine -- see
+// payload.Resolve -- so there is one rule for it and this reads the result.
 func configuredHooks(ic *installconfig.InstallConfig) *externaltypes.Hooks {
+	if res := payload.Resolved(); res != nil {
+		return res.Hooks
+	}
 	if ic == nil || ic.Config == nil || ic.Config.Platform.External == nil {
 		return nil
 	}
@@ -109,6 +121,34 @@ func configuredHooks(ic *installconfig.InstallConfig) *externaltypes.Hooks {
 		return nil
 	}
 	return capi.Hooks
+}
+
+// hookRoot is the directory this hook's program is resolved against: the
+// payload's extraction directory when the payload supplied it, and the
+// External manifest directory otherwise. The empty string means the latter.
+//
+// It is asked per hook rather than once per install because the answer differs
+// per hook. A payload may declare an infraReady hook and the install-config
+// override postProvision; the two then live in different directories, and
+// answering with one root for both sends one of them somewhere it is not.
+func hookRoot(kind hooks.Kind) string {
+	res := payload.Resolved()
+	if res == nil {
+		return ""
+	}
+	switch kind {
+	case hooks.InfraReady:
+		return res.HookRoots.InfraReady
+	case hooks.PostProvision:
+		return res.HookRoots.PostProvision
+	case hooks.PreDestroy:
+		// Not reached: `destroy cluster` runs this hook from metadata.json,
+		// in a process that has resolved no payload. Answered anyway so that
+		// the mapping is complete where it is defined.
+		return res.HookRoots.PreDestroy
+	default:
+		return ""
+	}
 }
 
 // warnNoInfraReadyHook says what will go wrong, rather than that something is

@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/installer/pkg/asset/password"
 	"github.com/openshift/installer/pkg/asset/rhcos"
 	"github.com/openshift/installer/pkg/asset/templates/content/openshift"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 	"github.com/openshift/installer/pkg/types"
 	awstypes "github.com/openshift/installer/pkg/types/aws"
 	azuretypes "github.com/openshift/installer/pkg/types/azure"
@@ -314,6 +315,17 @@ func (o *Openshift) Generate(ctx context.Context, dependencies asset.Parents) er
 	o.FileList = append(o.FileList, imageRegistryConfig.Files()...)
 
 	if platform == externaltypes.Name {
+		// A provider payload carries its own day-0 manifests, and they are
+		// rendered into the same extra-manifests directory a user writes by
+		// hand. This is the first stage that reads that directory, so it is
+		// the first that has to make sure the payload is there -- and doing it
+		// here rather than in a dedicated asset keeps the resolution out of
+		// every other platform's dependency graph.
+		if _, err := payload.ResolveForInstallConfig(ctx, installConfig.Config, command.RootOpts.Dir, clusterID.InfraID); err != nil {
+			o.FileList = nil
+			return fmt.Errorf("failed to resolve the Cluster API provider payload: %w", err)
+		}
+
 		generated := sets.New[string]()
 		for _, f := range o.FileList {
 			generated.Insert(path.Base(f.Filename))
