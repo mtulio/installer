@@ -50,8 +50,11 @@ type Resolution struct {
 	ControllerPath string
 	ComponentsPath string
 
-	// Args are the controller's extra command-line arguments, taken from
-	// whichever of the two install-config spellings was used.
+	// Args is the controller's whole command line: the payload's
+	// spec.capi.controllerArgs, then the install-config's
+	// controllerExtraArgs. The installer's render tokens are still in it --
+	// pkg/clusterapi resolves them against the local control plane it is
+	// about to start, which is not something this package can know.
 	Args []string
 
 	// Hooks are the hook programs that will run, whether the payload declared
@@ -72,6 +75,7 @@ type Resolution struct {
 // install-config named lives in the External manifest directory. A single root
 // can only be right for a payload whose hooks are all overridden or all not.
 type HookRoots struct {
+	Ignition      string
 	InfraReady    string
 	PostProvision string
 	PreDestroy    string
@@ -87,6 +91,11 @@ type ResolveOptions struct {
 
 	// InstallDir is the install directory. It need not be absolute.
 	InstallDir string
+
+	// PlatformName is platform.external.platformName. The payload's
+	// metadata.name must equal it. Empty skips the check, which is what a
+	// caller that has no install-config does.
+	PlatformName string
 
 	// The cluster's identity, published to the templates as the INSTALLER_
 	// variables. None of these is a credential.
@@ -200,26 +209,41 @@ func Resolve(ctx context.Context, opts ResolveOptions) (*Resolution, error) {
 		return nil, err
 	}
 
+	// The payload is bound to the platform by name. metadata.name is what
+	// reaches Infrastructure.status.platformStatus.external, so a payload
+	// installed under a different platformName would produce a cluster whose
+	// own record of who installed it is wrong -- and `destroy cluster`, which
+	// reads the name back out of metadata.json, would look for a provider
+	// nobody ran.
+	if opts.PlatformName != "" && descriptor.Metadata.Name != opts.PlatformName {
+		return nil, fmt.Errorf("the provider payload declares metadata.name %q, but the install-config sets "+
+			"platform.external.platformName to %q; they must be equal, because platformName is the name the "+
+			"installed cluster records for the provider that built it",
+			descriptor.Metadata.Name, opts.PlatformName)
+	}
+
 	res := &Resolution{
-		Image:          p.Controller.Image,
+		Image:          p.PayloadImage,
 		Digest:         digest,
 		Reused:         reused,
 		Root:           root,
-		ControllerPath: filepath.Join(root, descriptor.Layout.Controller),
-		Args:           controllerArgs(p),
+		ControllerPath: filepath.Join(root, descriptor.Spec.CAPI.Controller),
+		Args:           controllerArgs(descriptor, p),
 	}
 
 	// The install-config may name a different components bundle or manifest
 	// directory than the payload declares. Both are resolved against the
 	// payload root and must stay inside it: an override selects between things
 	// the payload shipped, it does not reach outside the unit of trust.
-	components, err := overridePath(root, descriptor.Layout.CustomResource, p.CustomResource, "customResource")
+	components, err := overridePath(root, descriptor.Spec.CAPI.InfrastructureComponents,
+		p.InfrastructureComponents, "infrastructureComponents")
 	if err != nil {
 		return nil, err
 	}
 	res.ComponentsPath = components
 
-	manifestTemplates, err := overridePath(root, descriptor.Layout.ManifestTemplates, p.ManifestPath, "manifestPath")
+	manifestTemplates, err := overridePath(root, descriptor.Spec.OpenShift.ManifestTemplates,
+		p.ManifestTemplates, "manifestTemplates")
 	if err != nil {
 		return nil, err
 	}
@@ -228,10 +252,16 @@ func Resolve(ctx context.Context, opts ResolveOptions) (*Resolution, error) {
 		return nil, err
 	}
 
-	res.Hooks, res.HookRoots = payloadHooks(descriptor, p, installDir, root)
+	res.Hooks, res.HookRoots = payloadHooks(descriptor, installDir, root)
 
 	logrus.Infof("Using the %s Cluster API provider payload from %s: controller %s, components %s",
-		p.Name, describeSource(res), res.ControllerPath, res.ComponentsPath)
+		descriptor.Metadata.Name, describeSource(res), res.ControllerPath, res.ComponentsPath)
+	if len(descriptor.Metadata.Labels) > 0 {
+		// Informational, never read to decide behaviour: it is the declarative
+		// fallback for a payload whose image carries no OCI labels of its own,
+		// and a support case needs some record of which provider build ran.
+		logrus.Infof("Provider payload labels: %s", strings.Join(sortedLabels(descriptor.Metadata.Labels), ", "))
+	}
 
 	resolved.res = res
 	return res, nil
@@ -254,17 +284,29 @@ func describeSource(res *Resolution) string {
 	return fmt.Sprintf("%s (%s)", res.Image, res.Digest)
 }
 
-// controllerArgs returns the extra controller arguments from whichever
-// spelling the install-config used. Validation has already refused both at
-// once, so there is nothing to merge.
-func controllerArgs(p *external.ClusterAPIProvider) []string {
-	if len(p.Args) > 0 {
-		return append([]string(nil), p.Args...)
+// controllerArgs is the payload's command line followed by the
+// install-config's additions.
+//
+// The payload's list is the whole baseline rather than an addition to one the
+// installer builds, which is the change that let a provider whose flag names
+// differ from CAPA's be started at all: append cannot remove, so an injected
+// --health-addr could not be unspelled by anything a payload or a user wrote.
+// The install-config's entries come last so that the last occurrence of a
+// repeated flag is the operator's, which is what makes "-v=5" work for a
+// support case without repackaging the image.
+func controllerArgs(d *Descriptor, p *external.ClusterAPIProvider) []string {
+	args := append([]string(nil), d.Spec.CAPI.ControllerArgs...)
+	return append(args, p.ControllerExtraArgs...)
+}
+
+// sortedLabels renders the payload's labels for one log line.
+func sortedLabels(labels map[string]string) []string {
+	out := make([]string, 0, len(labels))
+	for k, v := range labels {
+		out = append(out, k+"="+v)
 	}
-	if p.Controller != nil {
-		return append([]string(nil), p.Controller.Args...)
-	}
-	return nil
+	sort.Strings(out)
+	return out
 }
 
 // payloadRoot resolves the extraction directory, defaulting to the
@@ -318,7 +360,7 @@ func overridePath(root, declared, configured, field string) (string, error) {
 // the right one to record, because what ran is what was extracted, not what
 // the tag points at today.
 func obtain(ctx context.Context, opts ResolveOptions, root, installDir string) (string, bool, error) {
-	ref := opts.Provider.Controller.Image
+	ref := opts.Provider.PayloadImage
 	statePath := filepath.Join(installDir, stateFile)
 
 	if state, err := readState(statePath); err == nil && state.Image == ref && state.Root == root {
@@ -382,8 +424,8 @@ func writeState(path string, state payloadState) error {
 func renderTrees(root, installDir string, d *Descriptor, manifestTemplates string, opts ResolveOptions) error {
 	vars := variables(opts)
 
-	if d.Layout.ClusterTemplates != "" {
-		src := filepath.Join(root, d.Layout.ClusterTemplates)
+	if d.Spec.CAPI.ClusterTemplates != "" {
+		src := filepath.Join(root, d.Spec.CAPI.ClusterTemplates)
 		dst := filepath.Join(installDir, external.ManifestDir)
 		if err := Render(src, dst, vars); err != nil {
 			return err
@@ -442,28 +484,25 @@ func sortedNames(vars map[string]string) []string {
 	return names
 }
 
-// payloadHooks decides, phase by phase, which program runs and which directory
-// it is resolved against.
+// payloadHooks reports which program runs at each phase and which directory it
+// is resolved against.
 //
-// Phase by phase is the point. The install-config's own hook wins when it names
-// one, so a user can point a phase at their own script without rebuilding the
-// payload -- and the root follows the winner, because a program the payload
-// declared lives in the extraction directory and one the user named lives in
-// the External manifest directory.
+// Only the payload declares hooks. The install-config had a hooks stanza
+// through the pilot and it is gone: a payload's hooks and its templates are
+// written together and have to agree, so a second place to name one was a way
+// for them to disagree -- and a hook replaced from the install-config was also
+// resolved against a different root, which made overriding one phase move
+// where the others were looked for.
 //
-// An earlier version returned a single root for the whole set, which made
-// overriding one hook silently move the others: a user who replaced
-// postProvision alone left the payload's own infraReady program being looked
-// for under the External manifest directory, where it does not exist, and the
-// install failed on a hook that nothing was wrong with. Nothing in the
-// install-config said that would happen, and nothing in the error said why.
+// A phase with no declaration is left nil, which is how every caller already
+// spells "skip". That is the ordinary case -- most payloads will not declare
+// ignition at all -- and it is not worth a warning here; the warning
+// belongs where the consequence is known, next to the phase that will not run.
 //
-// A phase with neither a declaration nor an override is left nil, which is how
-// every caller already spells "skip". That is the ordinary case for a payload
-// that ships, say, only an infraReady hook, and it is not worth a warning here
-// -- the warning belongs where the consequence is known, next to the phase that
-// will not run.
-func payloadHooks(d *Descriptor, p *external.ClusterAPIProvider, installDir, root string) (*external.Hooks, HookRoots) {
+// The roots are per-phase even though every root is now the same directory.
+// Keeping the shape costs nothing and the type is written to metadata.json,
+// where narrowing it would be a change to a file `destroy cluster` reads.
+func payloadHooks(d *Descriptor, installDir, root string) (*external.Hooks, HookRoots) {
 	payloadRoot, err := filepath.Rel(installDir, root)
 	if err != nil {
 		// root was built by joining installDir, so this cannot happen; falling
@@ -471,45 +510,28 @@ func payloadHooks(d *Descriptor, p *external.ClusterAPIProvider, installDir, roo
 		payloadRoot = external.CapiInstallerDir
 	}
 
-	var declared LayoutHooks
-	if d.Layout.Hooks != nil {
-		declared = *d.Layout.Hooks
-	}
-	configured := p.Hooks
+	declared := d.Spec.Hooks()
 
 	hooks := &external.Hooks{}
 	roots := HookRoots{}
 	for _, h := range []struct {
-		phase    string
-		declared string
-		override *external.Hook
+		declared *HookDeclaration
 		dst      **external.Hook
 		dstRoot  *string
 	}{
-		{"infraReady", declared.InfraReady,
-			hookOrNil(configured, func(h *external.Hooks) *external.Hook { return h.InfraReady }),
-			&hooks.InfraReady, &roots.InfraReady},
-		{"postProvision", declared.PostProvision,
-			hookOrNil(configured, func(h *external.Hooks) *external.Hook { return h.PostProvision }),
-			&hooks.PostProvision, &roots.PostProvision},
-		{"preDestroy", declared.PreDestroy,
-			hookOrNil(configured, func(h *external.Hooks) *external.Hook { return h.PreDestroy }),
-			&hooks.PreDestroy, &roots.PreDestroy},
+		{declared.Ignition, &hooks.Ignition, &roots.Ignition},
+		{declared.InfraReady, &hooks.InfraReady, &roots.InfraReady},
+		{declared.PostProvision, &hooks.PostProvision, &roots.PostProvision},
+		{declared.PreDestroy, &hooks.PreDestroy, &roots.PreDestroy},
 	} {
-		switch {
-		case h.override != nil:
-			*h.dst = h.override.DeepCopy()
-			*h.dstRoot = external.ManifestDir
-			if h.declared != "" {
-				logrus.Warnf("platform.external.clusterAPI.hooks.%s replaces the %s hook the provider "+
-					"payload declares (%s). The payload's other hooks are unaffected and still run from %q; "+
-					"yours runs from %q.",
-					h.phase, h.phase, h.declared, payloadRoot, external.ManifestDir)
-			}
-		case h.declared != "":
-			*h.dst = &external.Hook{Program: h.declared}
-			*h.dstRoot = payloadRoot
+		if h.declared == nil {
+			continue
 		}
+		*h.dst = &external.Hook{
+			Program:             h.declared.Program,
+			BootstrapOutputPath: h.declared.BootstrapOutputPath,
+		}
+		*h.dstRoot = payloadRoot
 	}
 
 	if !anyHook(hooks) {
@@ -518,15 +540,9 @@ func payloadHooks(d *Descriptor, p *external.ClusterAPIProvider, installDir, roo
 	return hooks, roots
 }
 
-func hookOrNil(h *external.Hooks, pick func(*external.Hooks) *external.Hook) *external.Hook {
-	if h == nil {
-		return nil
-	}
-	return pick(h)
-}
-
 func anyHook(h *external.Hooks) bool {
-	return h != nil && (h.InfraReady != nil || h.PostProvision != nil || h.PreDestroy != nil)
+	return h != nil &&
+		(h.Ignition != nil || h.InfraReady != nil || h.PostProvision != nil || h.PreDestroy != nil)
 }
 
 // ResolveForInstallConfig is the entry point every stage of the installer
@@ -551,14 +567,15 @@ func ResolveForInstallConfig(ctx context.Context, ic *types.InstallConfig, insta
 	}
 
 	return Resolve(ctx, ResolveOptions{
-		Provider:    capi,
-		InstallDir:  installDir,
-		InfraID:     infraID,
-		ClusterName: ic.ObjectMeta.Name,
-		BaseDomain:  ic.BaseDomain,
-		Publish:     string(ic.Publish),
-		PullSecret:  ic.PullSecret,
-		Mirrors:     mirrors,
+		Provider:     capi,
+		PlatformName: ic.Platform.External.PlatformName,
+		InstallDir:   installDir,
+		InfraID:      infraID,
+		ClusterName:  ic.ObjectMeta.Name,
+		BaseDomain:   ic.BaseDomain,
+		Publish:      string(ic.Publish),
+		PullSecret:   ic.PullSecret,
+		Mirrors:      mirrors,
 	})
 }
 

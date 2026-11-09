@@ -21,30 +21,24 @@ func Metadata(config *types.InstallConfig) *external.Metadata {
 	}
 
 	if capi := config.Platform.External.ClusterAPI; capi != nil {
-		metadata.ClusterAPI = &external.ClusterAPIMetadata{
-			Name:           capi.Name,
-			BinaryPath:     capi.BinaryPath,
-			ComponentsPath: capi.ComponentsPath,
-			Args:           append([]string(nil), capi.Args...),
-		}
-		// Copied rather than shared: metadata is marshalled well after this
-		// returns, and the install-config is not this function's to alias.
-		// Deeply, because each hook is itself a pointer to a struct holding a
-		// slice, and a shallow copy would alias both.
-		metadata.ClusterAPI.Hooks = capi.Hooks.DeepCopy()
-
+		// Nothing is copied out of the install-config. It names a payload
+		// image and nothing else: the binary, the components, the command line
+		// and the hooks are all inside the payload, and what this file has to
+		// record is where they were extracted to on this host, which only the
+		// resolution knows.
+		metadata.ClusterAPI = &external.ClusterAPIMetadata{}
 		recordPayload(capi, metadata.ClusterAPI)
 	}
 
 	return metadata
 }
 
-// recordPayload overwrites the artifact locations with the ones a provider
-// payload actually resolved to.
+// recordPayload fills in the artifact locations a provider payload resolved
+// to.
 //
-// In image mode the install-config names none of them -- validation rejects a
-// local path there -- so what is copied above is empty, and an empty
-// BinaryPath in metadata.json is a cluster `destroy cluster` cannot remove.
+// Everything `destroy cluster` needs is here, and nowhere else: an empty
+// BinaryPath in metadata.json is a cluster that cannot be removed, because the
+// destroy path has no install-config to fall back on and no SDK of its own.
 //
 // The resolution is read from the payload package rather than recomputed
 // because it must be the same one the install used: the openshift manifests

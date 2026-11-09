@@ -38,9 +38,10 @@ func newExtractClusterAPICmd() *cobra.Command {
 		Long: fmt.Sprintf(`Write an embedded Cluster API infrastructure provider's controller
 binary and component manifests to a directory.
 
-The extracted artifacts are what platform.external.clusterAPI points at, so
-this makes it possible to exercise the External platform with a provider this
+The extracted artifacts are the inputs to a provider payload image, so this
+makes it possible to exercise the External platform with a provider this
 installer builds and tests itself, rather than with an unknown external build.
+The install-config points at a payload image, never at these paths.
 
 Known providers: %s`, knownProviders()),
 		// The root command silences usage and errors (main.go:79-80), so
@@ -62,8 +63,8 @@ Known providers: %s`, knownProviders()),
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\nAdd this under platform.external in your install-config.yaml:\n\n%s\n",
-				extracted.InstallConfigSnippet())
+			fmt.Printf("\nBuild a provider payload image around these artifacts. "+
+				"A descriptor to start from:\n\n%s\n", extracted.PayloadDescriptor())
 			return nil
 		},
 	}

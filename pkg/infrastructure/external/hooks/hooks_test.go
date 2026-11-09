@@ -134,6 +134,55 @@ func TestRunPassesTheContract(t *testing.T) {
 	assert.Contains(t, env, dir)
 }
 
+// TestRunPassesTheIgnitionContractOnlyToIgnition covers the two
+// variables the ignition phase adds, and the fact that no other phase
+// sees them.
+//
+// The absence is the half worth testing. A hook is one program dispatching on
+// OPENSHIFT_INSTALL_HOOK, so a payload that finds the input path set during
+// infra-ready would reasonably conclude it was expected to stage something --
+// and whatever it wrote would be read by nobody, because only the Ignition
+// provider reads the output back.
+func TestRunPassesTheIgnitionContractOnlyToIgnition(t *testing.T) {
+	skipWithoutShell(t)
+
+	dump := "#!/bin/sh\nenv | grep '^OPENSHIFT_INSTALL_' | sort > \"$OPENSHIFT_INSTALL_STATE_DIR/env\"\n"
+	readEnv := func(t *testing.T, dir string) string {
+		t.Helper()
+		out, err := os.ReadFile(filepath.Join(dir, externaltypes.ManifestDir, externaltypes.HookStateDir, "env"))
+		require.NoError(t, err)
+		return string(out)
+	}
+
+	t.Run("ignition", func(t *testing.T) {
+		dir := writeHook(t, "hooks/dump.sh", dump, 0o755)
+		outDir := t.TempDir()
+		require.NoError(t, Run(context.Background(), Request{
+			Kind:                  Ignition,
+			Program:               "hooks/dump.sh",
+			InstallDir:            dir,
+			BootstrapIgnitionPath: filepath.Join(outDir, "in", "bootstrap.ign"),
+			OutputDir:             outDir,
+		}))
+
+		env := readEnv(t, dir)
+		assert.Contains(t, env, "OPENSHIFT_INSTALL_HOOK=ignition")
+		assert.Contains(t, env, "OPENSHIFT_INSTALL_BOOTSTRAP_IGNITION="+filepath.Join(outDir, "in", "bootstrap.ign"))
+		assert.Contains(t, env, "OPENSHIFT_INSTALL_HOOK_OUTPUT_DIR="+outDir)
+	})
+
+	t.Run("every other phase sees neither", func(t *testing.T) {
+		dir := writeHook(t, "hooks/dump.sh", dump, 0o755)
+		require.NoError(t, Run(context.Background(), Request{
+			Kind: InfraReady, Program: "hooks/dump.sh", InstallDir: dir,
+		}))
+
+		env := readEnv(t, dir)
+		assert.NotContains(t, env, "OPENSHIFT_INSTALL_BOOTSTRAP_IGNITION")
+		assert.NotContains(t, env, "OPENSHIFT_INSTALL_HOOK_OUTPUT_DIR")
+	})
+}
+
 // TestRunPassesObjectsAsReadableFiles covers the mechanism that makes a hook
 // able to do anything provider-specific at all: the provider's own object,
 // which the installer has no type for, handed over as JSON.
@@ -202,26 +251,49 @@ func TestStateDirSurvivesBetweenHooks(t *testing.T) {
 	assert.Equal(t, "zone-123\n", string(got))
 }
 
-// TestRunPassesArgsVerbatim is the flag half of the contract: the installer
-// hands the program its argv unchanged, which is what lets a hook be a
-// compiled binary as readily as a script and lets a failed hook be rerun by
-// hand from the command line in the installer's log.
-func TestRunPassesArgsVerbatim(t *testing.T) {
+// TestRunRedirectsOutputToAPerPhaseFile pins where a hook's output goes, and
+// where it does not.
+//
+// It used to be tailed into .openshift_install.log. That log is attached to
+// support cases, and a hook's natural debug line is a URL -- a pre-signed
+// object-store URL for ignition, which is a bearer credential for the
+// cluster's whole bootstrap ignition. So the output is now written to a file
+// beside the install directory and the installer logs only the path.
+//
+// The modes are the point of the test as much as the path is: 0700 on the
+// directory and 0600 on the file, because the thing being contained is
+// credential-bearing by assumption rather than by inspection.
+func TestRunRedirectsOutputToAPerPhaseFile(t *testing.T) {
 	skipWithoutShell(t)
 
-	dir := writeHook(t, "hooks/args.sh",
-		"#!/bin/sh\nfor a in \"$@\"; do echo \"[$a]\" >>\"${OPENSHIFT_INSTALL_STATE_DIR}/argv\"; done\n", 0o755)
+	dir := writeHook(t, "hooks/talks.sh",
+		"#!/bin/sh\necho on-stdout\necho on-stderr >&2\n", 0o755)
 
-	// A value with a space in it is the case worth pinning: it survives only
-	// if the installer never puts the argv through a shell.
-	args := []string{"--input-service=openshift-ingress/router-external-default", "--input-dns-zone", "Z 1"}
 	require.NoError(t, Run(context.Background(), Request{
-		Kind: PostProvision, Program: "hooks/args.sh", Args: args, InstallDir: dir,
+		Kind: PostProvision, Program: "hooks/talks.sh", InstallDir: dir,
 	}))
 
-	got, err := os.ReadFile(filepath.Join(dir, externaltypes.ManifestDir, externaltypes.HookStateDir, "argv"))
+	logDir := filepath.Join(dir, externaltypes.HookLogDir)
+	di, err := os.Stat(logDir)
 	require.NoError(t, err)
-	assert.Equal(t, "[--input-service=openshift-ingress/router-external-default]\n[--input-dns-zone]\n[Z 1]\n", string(got))
+	assert.Equal(t, os.FileMode(0o700), di.Mode().Perm())
+
+	logPath := filepath.Join(logDir, "post-provision.log")
+	fi, err := os.Stat(logPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
+
+	// Both streams, into the one file, so the ordering a hook wrote them in
+	// is the ordering someone reading it gets.
+	got, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), "on-stdout")
+	assert.Contains(t, string(got), "on-stderr")
+
+	// One file per phase, named for the phase: a second phase does not
+	// overwrite the first, which is what makes the three readable together
+	// after a failed install.
+	assert.NoFileExists(t, filepath.Join(logDir, "infra-ready.log"))
 }
 
 // TestRunRejects covers every way a hook can be unusable. Each of these is a
@@ -229,21 +301,23 @@ func TestRunPassesArgsVerbatim(t *testing.T) {
 func TestRunRejects(t *testing.T) {
 	skipWithoutShell(t)
 
-	t.Run("non-zero exit fails the install", func(t *testing.T) {
+	t.Run("non-zero exit fails the install and points at the log", func(t *testing.T) {
 		dir := writeHook(t, "hooks/fail.sh", "#!/bin/sh\necho breaking >&2\nexit 3\n", 0o755)
 		err := Run(context.Background(), Request{Kind: InfraReady, Program: "hooks/fail.sh", InstallDir: dir})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "exited 3")
-		// The hook's own last words, not a pointer to the log. A hook is the
-		// only thing that knows why it failed.
-		assert.Contains(t, err.Error(), "breaking")
-	})
 
-	t.Run("a hook that says nothing says so", func(t *testing.T) {
-		dir := writeHook(t, "hooks/quiet.sh", "#!/bin/sh\nexit 1\n", 0o755)
-		err := Run(context.Background(), Request{Kind: InfraReady, Program: "hooks/quiet.sh", InstallDir: dir})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "produced no output")
+		// The error carries the path and not the output. A hook's last words
+		// are the most likely place for a credential to appear, and the error
+		// reaches .openshift_install.log.
+		logPath := filepath.Join(dir, externaltypes.HookLogDir, "infra-ready.log")
+		assert.Contains(t, err.Error(), logPath)
+		assert.NotContains(t, err.Error(), "breaking")
+
+		// But it is not lost -- it is in the file the error names.
+		got, readErr := os.ReadFile(logPath)
+		require.NoError(t, readErr)
+		assert.Contains(t, string(got), "breaking")
 	})
 
 	t.Run("missing program", func(t *testing.T) {

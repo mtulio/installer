@@ -30,22 +30,73 @@ const (
 	// APIVersion is the only descriptor API version this installer accepts.
 	APIVersion = "external.openshift.io/v1alpha1"
 	// Kind is the descriptor's kind.
-	Kind = "ProviderPayload"
+	Kind = "ExternalProviderPayload"
+)
+
+// The tokens the installer renders into the controller's command line before
+// it execs it (pkg/clusterapi/system.go:695-710). They are how a payload
+// declares a flag whose value only the installer knows, and they are the only
+// templating the descriptor supports.
+const (
+	// TokenWebhookPort and TokenWebhookCertDir are each required exactly once.
+	// A controller whose webhook disagrees with the one the installer
+	// installed fails late and obscurely, so the requirement is on the token
+	// rather than on any particular flag name -- a provider spells the flag
+	// however their binary spells it.
+	TokenWebhookPort    = "{{.WebhookPort}}"    // #nosec G101 // a template token for a directory path, not a credential
+	TokenWebhookCertDir = "{{.WebhookCertDir}}" // #nosec G101 // a template token for a directory path, not a credential
+
+	// TokenHealthHostPort is optional. Omitting it means the payload's
+	// controller publishes no health endpoint the installer knows the address
+	// of, and the installer does not poll /healthz.
+	TokenHealthHostPort = "{{suggestHealthHostPort}}"
 )
 
 // Descriptor is the content of openshift.yaml at the payload root.
+//
+// It is shaped like a Kubernetes object -- apiVersion, kind, metadata, spec --
+// because that is the shape every reader of this file already knows, and
+// because it leaves room for a status or a second version without the document
+// changing shape. Nothing serves it from an API server and nothing reconciles
+// it; the resemblance is to the reader's expectations, not to a controller.
 type Descriptor struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
 
+	Metadata Metadata `json:"metadata"`
+	Spec     Spec     `json:"spec"`
+}
+
+// Metadata identifies the payload.
+type Metadata struct {
+	// Name must equal platform.external.platformName in the install-config.
+	// Binding the two is what makes an install attributable: platformName is
+	// the value that reaches Infrastructure.status.platformStatus.external,
+	// so the cluster carries a record of which provider installed it, and the
+	// installer needs no third spelling of the same string.
+	Name string `json:"name"`
+
+	// Labels are informational and never read to decide behaviour. They are
+	// written to the install log, so they must carry no credential.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// Spec is everything the payload declares about itself.
+type Spec struct {
 	// Compatibility is the range of releases the provider claims this payload
 	// supports. The Cluster API contract is not repeated here: it comes from
 	// the adjacent clusterctl metadata.yaml, whose semantics are defined
 	// upstream rather than by us.
 	Compatibility Compatibility `json:"compatibility"`
 
-	// Layout maps each artifact to its path, relative to the payload root.
-	Layout Layout `json:"layout"`
+	// CAPI is everything Cluster API needs to run this provider.
+	CAPI CAPI `json:"capi"`
+
+	// OpenShift is what the installer does beyond Cluster API. A consumer that
+	// is not the installer reads CAPI and ignores this, which is why the two
+	// are separate rather than one flat layout.
+	OpenShift OpenShift `json:"openshift"`
 }
 
 // Compatibility declares what the payload supports.
@@ -59,45 +110,151 @@ type VersionRange struct {
 	Max string `json:"max"`
 }
 
-// Layout names each artifact's path relative to the payload root.
-type Layout struct {
+// CAPI names the Cluster API artifacts, by path relative to the payload root.
+type CAPI struct {
 	// Controller is the provider controller executable.
 	Controller string `json:"controller"`
 
-	// CustomResource is the single components bundle -- the provider's CRDs
-	// and webhook configurations. Only those two kinds are installed: the
-	// installer runs the controller as a local process, so any Namespace,
-	// RBAC or Deployment in the bundle is inert.
-	CustomResource string `json:"customResource"`
+	// ControllerArgs is the controller's whole command line, not an addition
+	// to one.
+	//
+	// The installer used to build a fixed list and append the provider's,
+	// which meant a provider could add a flag and never remove one. CAPOCI
+	// declares --health-probe-bind-address where the installer injected
+	// --health-addr, pflag exits non-zero on an unknown flag, and the only
+	// recourse was a wrapper script in front of the real binary. Every
+	// integrated provider already owns its full list (pkg/clusterapi/system.go:193
+	// for AWS, :381 for Nutanix), so this aligns the external path with the
+	// shape that already exists rather than adding a second mechanism.
+	//
+	// --kubeconfig must not be declared: the installer appends it.
+	// +optional
+	ControllerArgs []string `json:"controllerArgs,omitempty"`
+
+	// InfrastructureComponents is the single components bundle -- the
+	// provider's CRDs and webhook configurations. Only those two kinds are
+	// installed: the installer runs the controller as a local process, so any
+	// Namespace, RBAC or Deployment in the bundle is inert.
+	InfrastructureComponents string `json:"infrastructureComponents"`
 
 	// ClusterTemplates holds Cluster API objects applied to the installer's
 	// local, ephemeral control plane. Nothing in this tree reaches the
 	// installed cluster.
 	//
-	// It is a separate key from ManifestTemplates, rather than one rendered
-	// directory, because the two have different destinations and different
-	// lifetimes. Rendering is the only thing they have in common.
+	// It is a separate key from OpenShift.ManifestTemplates, rather than one
+	// rendered directory, because the two have different destinations and
+	// different lifetimes. Rendering is the only thing they have in common.
 	// +optional
 	ClusterTemplates string `json:"clusterTemplates,omitempty"`
 
+	// E2E is reserved. A payload may declare a test entry point and the
+	// installer validates that it exists and is executable, but nothing runs
+	// it: there is no conformance suite to run it against yet, and reserving
+	// the key now is cheaper than adding it to a shipped contract later.
+	//
+	// Because every declared path must exist, a payload that ships no such
+	// program must omit this rather than declare an empty one.
+	// +optional
+	E2E *E2E `json:"e2e,omitempty"`
+}
+
+// E2E is the payload's reserved test entry point.
+type E2E struct {
+	Program string `json:"program"`
+}
+
+// OpenShift names the artifacts only the OpenShift installer consumes.
+type OpenShift struct {
 	// ManifestTemplates holds day-0 manifests folded into the install
 	// directory and applied during bootstrap. These do reach the cluster.
 	// +optional
 	ManifestTemplates string `json:"manifestTemplates,omitempty"`
 
-	// Hooks names the program for each install phase. Several phases may name
-	// the same program: a single script that dispatches on the phase is a
-	// normal shape, and declaring it three times is how it stays a declared
-	// executable rather than an undeclared one.
+	// InstallerHooks names the program for each install phase. Several phases
+	// may name the same program: a single script that dispatches on the phase
+	// is a normal shape, and declaring it three times is how it stays a
+	// declared executable rather than an undeclared one.
+	//
+	// The key carries the consumer's name because these are the installer's
+	// phases, not Cluster API's -- a reader who is not the installer can skip
+	// the whole stanza knowing it is not addressed to them.
 	// +optional
-	Hooks *LayoutHooks `json:"hooks,omitempty"`
+	InstallerHooks *InstallerHooks `json:"installerHooks,omitempty"`
 }
 
-// LayoutHooks names the hook program for each phase.
-type LayoutHooks struct {
-	InfraReady    string `json:"infraReady,omitempty"`
-	PostProvision string `json:"postProvision,omitempty"`
-	PreDestroy    string `json:"preDestroy,omitempty"`
+// InstallerHooks declares the hook for each phase.
+//
+// Every entry is an object rather than a bare path, so the map has one shape
+// whether or not a phase needs a second field. Only Ignition needs one
+// today.
+type InstallerHooks struct {
+	// Ignition runs after the cluster's infrastructure reports ready and
+	// before any machine is created, at the installer's IgnitionProvider
+	// point of extension. It is conditional, and most payloads will not
+	// declare it: it exists for a provider whose controller cannot stage an
+	// oversized bootstrap ignition itself.
+	//
+	// It is the only hook handed the cluster's day-0 secret material, so
+	// declaring it requires the cluster creator's consent through
+	// platform.external.clusterAPI.bootstrapIgnitionStaging.
+	// +optional
+	Ignition *HookDeclaration `json:"ignition,omitempty"`
+
+	// +optional
+	InfraReady *HookDeclaration `json:"infraReady,omitempty"`
+	// +optional
+	PostProvision *HookDeclaration `json:"postProvision,omitempty"`
+	// +optional
+	PreDestroy *HookDeclaration `json:"preDestroy,omitempty"`
+}
+
+// HookDeclaration is one phase's program, and whatever else that phase needs.
+type HookDeclaration struct {
+	// Program is the executable, relative to the payload root.
+	Program string `json:"program"`
+
+	// BootstrapOutputPath is the file the installer reads back after the hook
+	// returns, relative to the directory the installer creates for the hook
+	// and removes afterwards. It is required on Ignition and rejected on
+	// every other phase.
+	//
+	// Declared rather than fixed so that the installer has a name to validate
+	// and a name to put in a failure message. It must not be "bootstrap.ign":
+	// that name belongs to the installer's own output, which this hook never
+	// touches, and two files with one name would leave no way to tell which of
+	// them a later step consumed.
+	// +optional
+	BootstrapOutputPath string `json:"bootstrapOutputPath,omitempty"`
+}
+
+// bootstrapIgnitionFile is the installer's own bootstrap ignition filename,
+// which a hook's output must not shadow.
+const bootstrapIgnitionFile = "bootstrap.ign"
+
+// Hooks returns the declared hooks, or an empty set when none are declared, so
+// callers can read a phase without a nil guard.
+func (s Spec) Hooks() InstallerHooks {
+	if s.OpenShift.InstallerHooks == nil {
+		return InstallerHooks{}
+	}
+	return *s.OpenShift.InstallerHooks
+}
+
+// byPhase pairs each declared hook with the phase name used in messages. The
+// order is the order the phases run in.
+func (h InstallerHooks) byPhase() []struct {
+	Phase string
+	Hook  *HookDeclaration
+} {
+	return []struct {
+		Phase string
+		Hook  *HookDeclaration
+	}{
+		{"ignition", h.Ignition},
+		{"infraReady", h.InfraReady},
+		{"postProvision", h.PostProvision},
+		{"preDestroy", h.PreDestroy},
+	}
 }
 
 // Load reads and validates the descriptor at the root of an extracted
@@ -130,13 +287,92 @@ func Load(root string) (*Descriptor, error) {
 	if d.Kind != Kind {
 		return nil, fmt.Errorf("provider payload declares kind %q, expected %q", d.Kind, Kind)
 	}
-	if d.Layout.Controller == "" {
-		return nil, fmt.Errorf("%s declares no layout.controller", external.PayloadDescriptorFile)
+	if d.Metadata.Name == "" {
+		return nil, fmt.Errorf("%s declares no metadata.name; it is required and must equal "+
+			"platform.external.platformName in the install-config", external.PayloadDescriptorFile)
 	}
-	if d.Layout.CustomResource == "" {
-		return nil, fmt.Errorf("%s declares no layout.customResource", external.PayloadDescriptorFile)
+	if d.Spec.CAPI.Controller == "" {
+		return nil, fmt.Errorf("%s declares no spec.capi.controller", external.PayloadDescriptorFile)
+	}
+	if d.Spec.CAPI.InfrastructureComponents == "" {
+		return nil, fmt.Errorf("%s declares no spec.capi.infrastructureComponents", external.PayloadDescriptorFile)
+	}
+	if err := d.validateControllerArgs(); err != nil {
+		return nil, err
+	}
+	if err := d.validateHookDeclarations(); err != nil {
+		return nil, err
 	}
 	return d, nil
+}
+
+// validateControllerArgs checks the command line the payload owns.
+//
+// Here rather than in Validate because it needs only the document: a
+// descriptor whose controller could never be started correctly should be
+// refused as soon as it is read, not after an image has been extracted.
+func (d *Descriptor) validateControllerArgs() error {
+	args := d.Spec.CAPI.ControllerArgs
+
+	for _, token := range []string{TokenWebhookPort, TokenWebhookCertDir} {
+		n := 0
+		for _, a := range args {
+			n += strings.Count(a, token)
+		}
+		if n != 1 {
+			return fmt.Errorf("%s: spec.capi.controllerArgs contains the %s token %d times, expected exactly once. "+
+				"The installer renders the webhook server it installed into that token, and a controller serving "+
+				"its webhook anywhere else is one the local control plane cannot reach",
+				external.PayloadDescriptorFile, token, n)
+		}
+	}
+
+	for _, a := range args {
+		if name, _, _ := strings.Cut(a, "="); name == "--kubeconfig" {
+			return fmt.Errorf("%s: spec.capi.controllerArgs declares --kubeconfig, which the installer appends "+
+				"itself; the payload cannot know the path of a control plane that does not exist when it is built",
+				external.PayloadDescriptorFile)
+		}
+	}
+	return nil
+}
+
+// validateHookDeclarations checks each declared phase, and the one field that
+// belongs to exactly one of them.
+func (d *Descriptor) validateHookDeclarations() error {
+	for _, h := range d.Spec.Hooks().byPhase() {
+		if h.Hook == nil {
+			continue
+		}
+		key := "spec.openshift.installerHooks." + h.Phase
+		if h.Hook.Program == "" {
+			return fmt.Errorf("%s: %s declares no program", external.PayloadDescriptorFile, key)
+		}
+		if h.Phase != "ignition" {
+			if h.Hook.BootstrapOutputPath != "" {
+				return fmt.Errorf("%s: %s declares bootstrapOutputPath, which only ignition may declare: "+
+					"it is the one phase whose output the installer reads back",
+					external.PayloadDescriptorFile, key)
+			}
+			continue
+		}
+		out := h.Hook.BootstrapOutputPath
+		if out == "" {
+			return fmt.Errorf("%s: %s declares no bootstrapOutputPath. It is required: the installer reads that "+
+				"file back in place of its own bootstrap ignition, so it needs a name to validate and a name to "+
+				"put in a failure message", external.PayloadDescriptorFile, key)
+		}
+		if _, err := filepath.Localize(out); err != nil {
+			return fmt.Errorf("%s: %s bootstrapOutputPath %q must be a relative path inside the directory the "+
+				"installer creates for the hook", external.PayloadDescriptorFile, key, out)
+		}
+		if filepath.Clean(out) == bootstrapIgnitionFile {
+			return fmt.Errorf("%s: %s bootstrapOutputPath must not be %q, which is the installer's own output: "+
+				"two files with one name leave no way to tell which of them a later step consumed",
+				external.PayloadDescriptorFile, key, bootstrapIgnitionFile)
+		}
+	}
+	return nil
 }
 
 // declaredPaths returns every path the layout names, cleaned and deduplicated.
@@ -148,14 +384,17 @@ func (d *Descriptor) declaredPaths() []string {
 		}
 		seen[filepath.Clean(p)] = struct{}{}
 	}
-	add(d.Layout.Controller)
-	add(d.Layout.CustomResource)
-	add(d.Layout.ClusterTemplates)
-	add(d.Layout.ManifestTemplates)
-	if d.Layout.Hooks != nil {
-		add(d.Layout.Hooks.InfraReady)
-		add(d.Layout.Hooks.PostProvision)
-		add(d.Layout.Hooks.PreDestroy)
+	add(d.Spec.CAPI.Controller)
+	add(d.Spec.CAPI.InfrastructureComponents)
+	add(d.Spec.CAPI.ClusterTemplates)
+	add(d.Spec.OpenShift.ManifestTemplates)
+	if e2e := d.Spec.CAPI.E2E; e2e != nil {
+		add(e2e.Program)
+	}
+	for _, h := range d.Spec.Hooks().byPhase() {
+		if h.Hook != nil {
+			add(h.Hook.Program)
+		}
 	}
 	out := make([]string, 0, len(seen))
 	for p := range seen {
@@ -168,16 +407,17 @@ func (d *Descriptor) declaredPaths() []string {
 // executables returns the cleaned set of paths the layout declares as
 // programs: the controller, and each hook that is named.
 func (d *Descriptor) executables() map[string]struct{} {
-	out := map[string]struct{}{filepath.Clean(d.Layout.Controller): {}}
-	if d.Layout.Hooks != nil {
-		for _, rel := range []string{
-			d.Layout.Hooks.InfraReady,
-			d.Layout.Hooks.PostProvision,
-			d.Layout.Hooks.PreDestroy,
-		} {
-			if rel != "" {
-				out[filepath.Clean(rel)] = struct{}{}
-			}
+	out := map[string]struct{}{filepath.Clean(d.Spec.CAPI.Controller): {}}
+	// The e2e program is never run by the installer, but it is declared, and
+	// the declaration is what decides what may be executable. Leaving it out
+	// would ship it unexecutable and make the reservation useless to whatever
+	// eventually runs it.
+	if e2e := d.Spec.CAPI.E2E; e2e != nil && e2e.Program != "" {
+		out[filepath.Clean(e2e.Program)] = struct{}{}
+	}
+	for _, h := range d.Spec.Hooks().byPhase() {
+		if h.Hook != nil && h.Hook.Program != "" {
+			out[filepath.Clean(h.Hook.Program)] = struct{}{}
 		}
 	}
 	return out
@@ -259,28 +499,31 @@ func (d *Descriptor) Validate(root string) error {
 		return nil
 	}
 
-	if err := mustExist(d.Layout.Controller, "layout.controller", false); err != nil {
-		return err
+	for _, f := range []struct {
+		rel     string
+		role    string
+		wantDir bool
+	}{
+		{d.Spec.CAPI.Controller, "spec.capi.controller", false},
+		{d.Spec.CAPI.InfrastructureComponents, "spec.capi.infrastructureComponents", false},
+		{d.Spec.CAPI.ClusterTemplates, "spec.capi.clusterTemplates", true},
+		{d.Spec.OpenShift.ManifestTemplates, "spec.openshift.manifestTemplates", true},
+	} {
+		if err := mustExist(f.rel, f.role, f.wantDir); err != nil {
+			return err
+		}
 	}
-	if err := mustExist(d.Layout.CustomResource, "layout.customResource", false); err != nil {
-		return err
+	if e2e := d.Spec.CAPI.E2E; e2e != nil {
+		if err := mustExist(e2e.Program, "spec.capi.e2e.program", false); err != nil {
+			return err
+		}
 	}
-	if err := mustExist(d.Layout.ClusterTemplates, "layout.clusterTemplates", true); err != nil {
-		return err
-	}
-	if err := mustExist(d.Layout.ManifestTemplates, "layout.manifestTemplates", true); err != nil {
-		return err
-	}
-
-	if d.Layout.Hooks != nil {
-		for role, rel := range map[string]string{
-			"hooks.infraReady":    d.Layout.Hooks.InfraReady,
-			"hooks.postProvision": d.Layout.Hooks.PostProvision,
-			"hooks.preDestroy":    d.Layout.Hooks.PreDestroy,
-		} {
-			if err := mustExist(rel, "layout."+role, false); err != nil {
-				return err
-			}
+	for _, h := range d.Spec.Hooks().byPhase() {
+		if h.Hook == nil {
+			continue
+		}
+		if err := mustExist(h.Hook.Program, "spec.openshift.installerHooks."+h.Phase+".program", false); err != nil {
+			return err
 		}
 	}
 
@@ -368,7 +611,7 @@ func (d *Descriptor) CheckCompatibility(kubeVersion string) error {
 		return fmt.Errorf("cannot compare the provider payload's compatibility range against the cluster's "+
 			"Kubernetes version %q: %w", kubeVersion, err)
 	}
-	rng := d.Compatibility.Kubernetes
+	rng := d.Spec.Compatibility.Kubernetes
 	if rng.Min == "" && rng.Max == "" {
 		return errors.New("provider payload declares no compatibility.kubernetes range; a payload must state " +
 			"which releases it supports, because the installer has no other way to refuse an unsupported pairing")

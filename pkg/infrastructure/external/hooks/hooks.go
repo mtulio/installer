@@ -23,7 +23,6 @@
 package hooks
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -33,8 +32,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -49,6 +46,28 @@ import (
 type Kind string
 
 const (
+	// Ignition runs at the installer's IgnitionProvider point of extension:
+	// after the cluster's infrastructure reports ready and after the bootstrap
+	// ignition has had the install info injected, and before any machine is
+	// created. Cloud infrastructure therefore exists by this point -- the
+	// network and the load balancers -- but no compute does.
+	//
+	// That is the same point at which the integrated providers stage: the
+	// OpenStack provider uploads the bootstrap ignition and returns a shim,
+	// IBM Cloud writes it to a COS bucket because it is too large for VSI
+	// user data, and Nutanix builds an ISO and uploads it to Prism Central.
+	// A provider that needs cloud prerequisites to exist first -- a bucket,
+	// a pre-authenticated request -- has them here and would not at an
+	// earlier phase.
+	//
+	// It is the only hook whose output the installer reads back, and the only
+	// one handed the cluster's day-0 secret material. It exists for a provider
+	// whose cloud cannot carry a full bootstrap ignition in instance metadata
+	// -- OCI caps that metadata at 32,000 bytes and CAPOCI base64-encodes into
+	// it, so the effective ceiling is nearer 24,000 bytes -- and which has no
+	// equivalent of the staging CAPA does inside its own controller.
+	Ignition Kind = "ignition"
+
 	// InfraReady runs once the Cluster reports its infrastructure ready and
 	// before any machine is created.
 	InfraReady Kind = "infra-ready"
@@ -89,12 +108,6 @@ type Request struct {
 	// only what the root is.
 	ProgramRoot string
 
-	// Args is the program's argv, verbatim from the install-config. The
-	// installer does not interpret it -- see externaltypes.Hook for why the
-	// hook-specific half of the contract is arguments rather than more
-	// environment.
-	Args []string
-
 	// InstallDir is the install directory. It is the hook's working
 	// directory and the root its Program is resolved against.
 	InstallDir string
@@ -127,6 +140,22 @@ type Request struct {
 	// there is not exactly one, since a hook cannot be told which of several
 	// was meant.
 	InfraJSON []byte
+
+	// BootstrapIgnitionPath is the installer's finished bootstrap ignition.
+	// Set for Ignition and nothing else.
+	//
+	// The hook reads it and must not modify it: it is the installer's own
+	// file, and the installer compares what the hook wrote against it.
+	BootstrapIgnitionPath string
+
+	// OutputDir is a directory the installer creates for the hook and removes
+	// when it returns. Set for Ignition and nothing else.
+	//
+	// The hook's declared bootstrapOutputPath is relative to it. It is a
+	// directory the installer owns rather than a path the hook chooses so
+	// that a hook writing a staged ignition -- the whole cluster's day-0
+	// secrets in one file -- cannot leave it somewhere that gets archived.
+	OutputDir string
 }
 
 // clusterDomain is the name the cluster's DNS records hang off.
@@ -208,6 +237,17 @@ func Run(ctx context.Context, req Request) error {
 		"OPENSHIFT_INSTALL_KUBECONFIG="+filepath.Join(installDir, "auth", "kubeconfig"),
 	)
 
+	// Two variables nothing but Ignition sees. They are set from the
+	// Request rather than derived here because only the caller knows whether
+	// this phase is the one that stages ignition, and a hook that found them
+	// set at infra-ready would reasonably conclude it was expected to act.
+	if req.BootstrapIgnitionPath != "" {
+		env = append(env, "OPENSHIFT_INSTALL_BOOTSTRAP_IGNITION="+req.BootstrapIgnitionPath)
+	}
+	if req.OutputDir != "" {
+		env = append(env, "OPENSHIFT_INSTALL_HOOK_OUTPUT_DIR="+req.OutputDir)
+	}
+
 	for _, obj := range []struct {
 		envVar string
 		file   string
@@ -234,68 +274,70 @@ func Run(ctx context.Context, req Request) error {
 	if err != nil {
 		return err
 	}
-	// The arguments are logged with the program because together they are the
-	// command a human would have to repeat to reproduce a failure, and a hook
-	// that misbehaves usually does so because of what it was told rather than
-	// because of what it is. They are the user's own strings from the
-	// install-config, which is why externaltypes.Hook.Args says not to put a
-	// credential in one.
-	logrus.Infof("Running the %s hook %s%s (sha256:%s)",
-		req.Kind, program, formatArgs(req.Args), digest)
+	// A hook has no arguments. The payload declares a program and nothing
+	// else, so the command is fully described by the path and the digest --
+	// which also closes, by construction, the one way an argument list could
+	// put a credential into the installer log.
+	logFile, err := openLog(installDir, req.Kind)
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+	logPath := logFile.Name()
 
-	stdout := &logWriter{prefix: string(req.Kind)}
-	stderr := &logWriter{prefix: string(req.Kind)}
+	logrus.Infof("Running the %s hook %s (sha256:%s); its output is written to %s",
+		req.Kind, program, digest, logPath)
 
-	cmd := exec.CommandContext(ctx, program, req.Args...)
+	cmd := exec.CommandContext(ctx, program)
 	cmd.Dir = installDir
 	cmd.Env = env
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
 
 	runErr := cmd.Run()
-	stdout.Flush()
-	stderr.Flush()
 	if runErr != nil {
-		// The hook's own last words go into the error, not just into the log
-		// above it. A hook is the only thing that knows why it failed -- the
-		// installer cannot even name the resource it was creating -- so an
-		// error reading "exited 1, see the log" throws away the only useful
-		// sentence there was. stderr is preferred and stdout is the fallback,
-		// because a program that says nothing on stderr has usually said it
-		// on stdout.
-		detail := stderr.Tail()
-		if detail == "" {
-			detail = stdout.Tail()
-		}
+		// The hook's last words are deliberately not interpolated into this
+		// error. They used to be, and for the three original phases it was
+		// the right trade: a hook is the only thing that knows why it failed.
+		// Ignition changed the arithmetic -- its natural debug output is
+		// a pre-signed URL over the whole bootstrap ignition -- and a rule
+		// that quoted some phases and not others would be a rule the hook
+		// author cannot see from their side. So the path is given instead,
+		// and it is given in the error rather than only in the log above,
+		// because the error is what a user reads first.
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
-			if detail == "" {
-				return fmt.Errorf("the %s hook %s exited %d and produced no output",
-					req.Kind, req.Program, exitErr.ExitCode())
-			}
-			return fmt.Errorf("the %s hook %s exited %d: %s",
-				req.Kind, req.Program, exitErr.ExitCode(), detail)
+			return fmt.Errorf("the %s hook %s exited %d; its output is in %s",
+				req.Kind, req.Program, exitErr.ExitCode(), logPath)
 		}
-		return fmt.Errorf("failed to run the %s hook %s: %w", req.Kind, req.Program, runErr)
+		return fmt.Errorf("failed to run the %s hook %s: %w (its output, if any, is in %s)",
+			req.Kind, req.Program, runErr, logPath)
 	}
 	logrus.Infof("The %s hook %s succeeded", req.Kind, req.Program)
 	return nil
 }
 
-// formatArgs renders the argv for a log line, quoting anything that would be
-// ambiguous to read back.
-func formatArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
+// openLog creates this phase's log file, truncating any earlier one.
+//
+// Truncating rather than appending is deliberate: a phase runs once per
+// install, and a file holding two runs is one a reader has to date-stamp
+// before they can tell which failure they are looking at. The previous run's
+// output is not something the installer should be keeping anyway.
+//
+// 0600 on the file and 0700 on the directory, because the contents are
+// whatever the hook chose to print and the installer has no way to know what
+// that is.
+func openLog(installDir string, kind Kind) (*os.File, error) {
+	dir := filepath.Join(installDir, externaltypes.HookLogDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create the hook log directory %s: %w", dir, err)
 	}
-	quoted := make([]string, 0, len(args))
-	for _, a := range args {
-		if a == "" || strings.ContainsAny(a, " \t\n\"'\\") {
-			a = strconv.Quote(a)
-		}
-		quoted = append(quoted, a)
+	path := filepath.Join(dir, string(kind)+".log")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create the hook log %s: %w", path, err)
 	}
-	return " " + strings.Join(quoted, " ")
+	return f, nil
 }
 
 // resolveProgram turns the configured relative path into an absolute one,
@@ -363,67 +405,4 @@ func sha256File(path string) (string, error) {
 		return "", fmt.Errorf("failed to read %s: %w", path, err)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// tailLines is how many of a hook's last output lines are kept to put in the
-// error if it fails. Enough for a stack trace or a cloud API error with its
-// request ID; not so many that a chatty hook's whole run ends up quoted
-// inside a single installer error message, where it is unreadable.
-const tailLines = 5
-
-// logWriter forwards a child process's output to the installer log one line
-// at a time, so that a hook's progress is interleaved with the installer's
-// own rather than arriving in a block when the process exits.
-//
-// It also keeps the last few lines, which is what turns a hook's failure into
-// an installer error a user can act on rather than a reference to output
-// somewhere further up the terminal.
-type logWriter struct {
-	prefix string
-	buf    bytes.Buffer
-	tail   []string
-}
-
-// Write never fails, and says so, because it is handed to exec.Cmd as the
-// child's stdout and stderr: an error returned here would stop the installer
-// collecting a hook's output partway through, for no gain. The two writes it
-// makes are to a bytes.Buffer, which documents its error as always nil and
-// panics rather than returning one.
-func (w *logWriter) Write(p []byte) (int, error) {
-	w.buf.Write(p) //nolint:errcheck // bytes.Buffer.Write never returns an error.
-	for {
-		line, err := w.buf.ReadString('\n')
-		if err != nil {
-			// Partial line: put it back and wait for the rest.
-			w.buf.Reset()
-			w.buf.WriteString(line) //nolint:errcheck // as above.
-			break
-		}
-		w.emit(line)
-	}
-	return len(p), nil
-}
-
-// Flush emits whatever the process wrote without a trailing newline.
-func (w *logWriter) Flush() {
-	if w.buf.Len() > 0 {
-		w.emit(w.buf.String())
-		w.buf.Reset()
-	}
-}
-
-func (w *logWriter) emit(line string) {
-	if line = strings.TrimRight(line, "\r\n"); line != "" {
-		logrus.Infof("%s: %s", w.prefix, line)
-		w.tail = append(w.tail, line)
-		if len(w.tail) > tailLines {
-			w.tail = w.tail[len(w.tail)-tailLines:]
-		}
-	}
-}
-
-// Tail is the last few lines the process wrote, joined for an error message.
-// Call it after Flush.
-func (w *logWriter) Tail() string {
-	return strings.Join(w.tail, "; ")
 }

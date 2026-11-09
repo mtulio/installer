@@ -27,88 +27,50 @@ func ValidatePlatform(p *external.Platform, fldPath *field.Path, c *types.Instal
 // validateClusterAPI checks the user-supplied Cluster API infrastructure
 // provider.
 //
-// There are two modes and they are a union, not two independent field sets.
-// In the default "local" mode the binary and the components are paths on this
-// machine, and both are required together: a provider with no binary cannot be
-// started, and one with no components has no CRDs, so the manifests the user
-// supplies would be rejected by the local control plane. In "image" mode every
-// artifact comes from the payload and no local path is consulted, so supplying
-// one is an error rather than something to ignore -- a path that looks
-// configured and is silently unused is the failure worth catching early.
+// There is one supply mode: a payload image. The pilot also accepted a
+// controller binary and a components file as paths on this machine, and that
+// is gone -- not because it did not work, but because it made the provider
+// several independently-chosen artifacts instead of one unit, with nothing
+// recording which combination was installed. A partner with a binary on disk
+// builds a payload image around it.
 //
-// Only the shape of the configuration is checked here. Whether the paths
-// resolve to a usable executable, whether the image exists, and whether the
-// payload's declared layout is present are decided later, by the resolver in
-// pkg/infrastructure/external/payload: those checks need the filesystem or
-// the network, and duplicating them here would mean two implementations
-// disagreeing about what is valid.
+// What remains here is the shape of the configuration. Whether the image
+// exists, whether the payload's declared layout is present, and whether the
+// controller's command line is well formed are all decided later, by the
+// resolver in pkg/infrastructure/external/payload and by Descriptor.Load:
+// those need the network or the extracted tree, and duplicating them here
+// would mean two implementations disagreeing about what is valid.
+//
+// That split has one consequence worth naming. The payload's metadata.name
+// must equal platform.external.platformName, and the payload's ignition
+// hook requires bootstrapIgnitionStaging: Allowed -- neither can be checked
+// from the install-config alone, so both are enforced at resolve time, after
+// the image is pulled and before any cloud call. They are refusals, but they
+// are later refusals than the ones in this file.
 func validateClusterAPI(p *external.ClusterAPIProvider, fldPath *field.Path, c *types.InstallConfig) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if p == nil {
 		return allErrs
 	}
-	if p.Name == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("name"), "provider name is required"))
-	}
 
-	// One list of controller arguments, written in one place. Merging two
-	// spellings would be the kind of fact-written-twice that drifts apart
-	// without anyone noticing which copy is in effect.
-	if len(p.Args) > 0 && p.Controller != nil && len(p.Controller.Args) > 0 {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("controller", "args"), p.Controller.Args,
-			"args is set both here and at clusterAPI.args; set only one"))
-	}
-
-	if p.UsesImagePayload() {
-		allErrs = append(allErrs, validateImageMode(p, fldPath, c)...)
+	if p.PayloadImage == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("payloadImage"),
+			"a provider payload image is required to provision with Cluster API"))
 	} else {
-		allErrs = append(allErrs, validateLocalMode(p, fldPath)...)
+		allErrs = append(allErrs, validateImageReference(p.PayloadImage, fldPath.Child("payloadImage"), c)...)
 	}
 
+	allErrs = append(allErrs, validateControllerExtraArgs(p.ControllerExtraArgs,
+		fldPath.Child("controllerExtraArgs"))...)
+	allErrs = append(allErrs, validateBootstrapIgnitionStaging(p.BootstrapIgnitionStaging,
+		fldPath.Child("bootstrapIgnitionStaging"))...)
+	allErrs = append(allErrs, validatePayloadPaths(p, fldPath)...)
 	allErrs = append(allErrs, validateVariables(p, fldPath.Child("variables"))...)
-	// The External manifest directory in both modes: what is validated here is
-	// a hook the install-config names, and that is where such a hook lives
-	// whether or not a payload is in play. A payload's own hooks are declared
-	// in its descriptor, checked against the extracted tree by
-	// Descriptor.Validate, and resolved against the extraction directory --
-	// they never reach this function.
-	allErrs = append(allErrs, validateHooks(p.Hooks, fldPath.Child("hooks"), external.ManifestDir)...)
 	return allErrs
 }
 
 // digestReference matches a reference pinned by digest rather than by tag.
 var digestReference = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
-
-// validateImageMode checks the payload-image configuration.
-func validateImageMode(p *external.ClusterAPIProvider, fldPath *field.Path, c *types.InstallConfig) field.ErrorList {
-	allErrs := field.ErrorList{}
-	ctrl := fldPath.Child("controller")
-
-	if p.Controller.Image == "" {
-		allErrs = append(allErrs, field.Required(ctrl.Child("image"),
-			`image is required when sourceType is "image"`))
-	} else {
-		allErrs = append(allErrs, validateImageReference(p.Controller.Image, ctrl.Child("image"), c)...)
-	}
-
-	// The local-path fields are not merely ignored in this mode; accepting
-	// them would make it ambiguous which controller runs, and the payload is
-	// meant to be one unit of trust.
-	for _, f := range []struct {
-		path  *field.Path
-		value string
-	}{
-		{fldPath.Child("binaryPath"), p.BinaryPath},
-		{fldPath.Child("componentsPath"), p.ComponentsPath},
-		{ctrl.Child("path"), p.Controller.Path},
-	} {
-		if f.value != "" {
-			allErrs = append(allErrs, field.Invalid(f.path, f.value,
-				`must not be set when controller.sourceType is "image": the payload supplies every artifact`))
-		}
-	}
-	return allErrs
-}
 
 // validateImageReference requires a fully qualified reference, and a digest
 // when the install is mirrored.
@@ -137,45 +99,93 @@ func validateImageReference(ref string, fldPath *field.Path, c *types.InstallCon
 	return allErrs
 }
 
-// validateLocalMode checks the original, path-based configuration. Its rules
-// are unchanged: this is the behaviour that existed before payload images, and
-// it has to keep working exactly as it did.
-func validateLocalMode(p *external.ClusterAPIProvider, fldPath *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
+// renderToken matches the installer's template syntax in a value that is not
+// rendered.
+var renderToken = regexp.MustCompile(`{{[^}]*}}`)
 
-	binary := p.BinaryPath
-	if p.Controller != nil && p.Controller.Path != "" {
-		if binary != "" {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("controller", "path"), p.Controller.Path,
-				"the controller binary is set both here and at clusterAPI.binaryPath; set only one"))
+// validateControllerExtraArgs checks the arguments appended to the payload's
+// controller command line.
+//
+// These are appended verbatim, after the payload's own spec.capi.controllerArgs
+// and before the --kubeconfig the installer adds, so the last occurrence of a
+// repeated flag is this one. That is what makes "-v=5" work for a support case
+// without repackaging the image, and it is the whole intended use.
+//
+// What is refused is a render token. The payload's list is passed through
+// text/template so that a provider can declare a flag whose value only the
+// installer knows -- the webhook port, the certificate directory, a free health
+// port -- and that happens to render this list too. Those inputs are an
+// internal detail of how the local control plane is started, not a user
+// interface, and a cluster creator who writes one is either duplicating a value
+// the payload already declared, which breaks the exactly-once rule the payload
+// was validated against, or naming an input that does not exist, which renders
+// to the empty string and produces a flag with no value rather than an error.
+// Refusing the whole syntax is both checks at once, and it does not have to be
+// revisited every time a render input is added or removed.
+func validateControllerExtraArgs(args []string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	for i, a := range args {
+		if renderToken.MatchString(a) {
+			allErrs = append(allErrs, field.Invalid(fldPath.Index(i), a,
+				"must not contain a {{...}} template token: the installer's render inputs are supplied to "+
+					"the payload's spec.capi.controllerArgs and are not part of this field"))
 		}
-		binary = p.Controller.Path
 	}
-	if binary == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("binaryPath"),
-			"path to the provider controller binary is required"))
+	return allErrs
+}
+
+// validateBootstrapIgnitionStaging checks the consent value for the
+// ignition hook.
+//
+// Unset means Disabled. It is spelled as an explicit enum rather than a boolean
+// because the field is a consent to hand a hook the cluster's day-0 secret
+// material, and "bootstrapIgnitionStaging: false" reads like a feature being
+// turned off rather than a permission being withheld.
+//
+// This only checks the value. Whether the payload actually declares an
+// ignition hook is not knowable until the payload is pulled, so the
+// pairing -- hook declared, consent absent -- is enforced at resolve time.
+func validateBootstrapIgnitionStaging(v external.BootstrapIgnitionStaging, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	switch v {
+	case "", external.BootstrapIgnitionStagingDisabled, external.BootstrapIgnitionStagingAllowed:
+	default:
+		allErrs = append(allErrs, field.NotSupported(fldPath, v,
+			[]string{string(external.BootstrapIgnitionStagingDisabled),
+				string(external.BootstrapIgnitionStagingAllowed)}))
 	}
-	if p.ComponentsPath == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("componentsPath"),
-			"path to the provider components is required"))
-	}
-	if p.Controller != nil && p.Controller.Image != "" {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("controller", "image"), p.Controller.Image,
-			`must not be set unless controller.sourceType is "image"`))
-	}
-	// These three describe a payload's internal layout and have nothing to
-	// resolve against when there is no payload.
+	return allErrs
+}
+
+// validatePayloadPaths checks the three paths a cluster creator may still set.
+//
+// They are all relative, and containment is the only property decidable from
+// the string alone -- so it is the only one decided here. Whether the payload
+// has a file at the overriding path is checked where the extracted tree
+// exists.
+//
+// The two overrides are an escape hatch for a payload whose layout is wrong and
+// whose owner is not available to rebuild it; a conforming payload needs
+// neither. capiInstallerPath is different in kind: it names where the payload
+// is extracted, inside the install directory, and it exists because an operator
+// may need to move that tree off a small or noexec filesystem.
+func validatePayloadPaths(p *external.ClusterAPIProvider, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
 	for _, f := range []struct {
-		name  string
-		value string
+		name string
+		path string
+		root string
 	}{
-		{"capiInstallerPath", p.CapiInstallerPath},
-		{"customResource", p.CustomResource},
-		{"manifestPath", p.ManifestPath},
+		{"capiInstallerPath", p.CapiInstallerPath, "install directory"},
+		{"infrastructureComponents", p.InfrastructureComponents, "provider payload"},
+		{"manifestTemplates", p.ManifestTemplates, "provider payload"},
 	} {
-		if f.value != "" {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child(f.name), f.value,
-				`is only meaningful when controller.sourceType is "image"`))
+		if f.path == "" {
+			continue
+		}
+		if _, err := filepath.Localize(f.path); err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child(f.name), f.path,
+				fmt.Sprintf("must be a relative path inside the %s", f.root)))
 		}
 	}
 	return allErrs
@@ -187,20 +197,11 @@ var variableName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // validateVariables checks the substitution values.
 //
-// Variables only have a consumer in image mode, where the payload ships the
-// templates. Rejecting them otherwise rather than ignoring them follows the
-// same reasoning as the hook rules below: a setting the user believes is in
-// effect, and that nothing reads, is worth an error.
+// These are the one field a conforming payload genuinely requires from the
+// cluster creator: the payload ships the Cluster API templates, and the region,
+// network and image references in them are not knowable at build time.
 func validateVariables(p *external.ClusterAPIProvider, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if len(p.Variables) == 0 {
-		return allErrs
-	}
-	if !p.UsesImagePayload() {
-		allErrs = append(allErrs, field.Invalid(fldPath, p.Variables,
-			`is only meaningful when controller.sourceType is "image": nothing renders templates in local mode`))
-		return allErrs
-	}
 	for name := range p.Variables {
 		if !variableName.MatchString(name) {
 			allErrs = append(allErrs, field.Invalid(fldPath.Key(name), name,
@@ -227,61 +228,3 @@ func validateVariables(p *external.ClusterAPIProvider, fldPath *field.Path) fiel
 // TestVariablePrefixMatchesPayload asserts the two agree. It lives in this
 // package's tests, where importing upwards costs nothing.
 const payloadInstallerVariablePrefix = "INSTALLER_"
-
-// validateHooks checks the shape of each configured hook.
-//
-// Only containment is decided here, not existence or executability: those
-// need the install directory, which this package does not have, and they are
-// checked where the hook is about to run. Containment can be decided from the
-// string alone, and has to be, because it is the property that makes the
-// install directory a self-contained unit.
-//
-// Args are deliberately not validated at all. They are the partner's
-// contract with their own program, and the installer does not know what a
-// valid one looks like -- inventing a rule here would reject a working
-// configuration for a program this code has never seen.
-func validateHooks(h *external.Hooks, fldPath *field.Path, root string) field.ErrorList {
-	allErrs := field.ErrorList{}
-	if h == nil {
-		return allErrs
-	}
-	for _, hook := range []struct {
-		name string
-		hook *external.Hook
-	}{
-		{"infraReady", h.InfraReady},
-		{"postProvision", h.PostProvision},
-		{"preDestroy", h.PreDestroy},
-	} {
-		allErrs = append(allErrs, validateHook(hook.hook, fldPath.Child(hook.name), root)...)
-	}
-	return allErrs
-}
-
-// validateHook requires a program, given as a relative path that stays inside
-// the External manifest directory.
-//
-// filepath.Localize is the containment check rather than a hand-written scan
-// for "..": it rejects absolute paths, parent traversal and platform-specific
-// escapes in one place, and it is the same function the standard library uses
-// to decide whether a path from an untrusted source can be joined to a root.
-func validateHook(h *external.Hook, fldPath *field.Path, root string) field.ErrorList {
-	allErrs := field.ErrorList{}
-	if h == nil {
-		return allErrs
-	}
-	// An empty program with arguments set is the mistake worth catching: it
-	// is a hook the user believes they configured and that would silently
-	// never run.
-	if h.Program == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("program"),
-			"path to the hook program is required when the hook is configured"))
-		return allErrs
-	}
-	if _, err := filepath.Localize(h.Program); err != nil {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("program"), h.Program,
-			fmt.Sprintf("must be a relative path inside the %q directory, so that the hook travels with "+
-				"the unit it belongs to", root)))
-	}
-	return allErrs
-}

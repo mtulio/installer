@@ -25,14 +25,17 @@ func writeExtracted(t *testing.T, files map[string]string) string {
 	return root
 }
 
-func descriptorFor(controller string, hooks *LayoutHooks) *Descriptor {
+func descriptorFor(controller string, hooks *InstallerHooks) *Descriptor {
 	return &Descriptor{
 		APIVersion: APIVersion,
 		Kind:       Kind,
-		Layout: Layout{
-			Controller:     controller,
-			CustomResource: "infrastructure-components.yaml",
-			Hooks:          hooks,
+		Metadata:   Metadata{Name: "somecloud"},
+		Spec: Spec{
+			CAPI: CAPI{
+				Controller:               controller,
+				InfrastructureComponents: "infrastructure-components.yaml",
+			},
+			OpenShift: OpenShift{InstallerHooks: hooks},
 		},
 	}
 }
@@ -65,7 +68,9 @@ func TestApplyExecutableModesIsTheOnlySourceOfTheExecutableBit(t *testing.T) {
 		"bin/undeclared-helper":           "ELF",
 		"manifests/hidden-in-plain-sight": "#!/bin/sh\n",
 	})
-	d := descriptorFor("bin/controller", &LayoutHooks{InfraReady: "hooks/infra-hook.sh"})
+	d := descriptorFor("bin/controller", &InstallerHooks{
+		InfraReady: &HookDeclaration{Program: "hooks/infra-hook.sh"},
+	})
 
 	if m := mode(t, filepath.Join(root, "bin/controller")); m&0o111 != 0 {
 		t.Fatalf("precondition: controller was already executable (%s); the test is not reproducing oc", m)
@@ -185,5 +190,55 @@ func TestApplyExecutableModesIsIdempotent(t *testing.T) {
 	}
 	if second := mode(t, filepath.Join(root, "bin/controller")); second != first {
 		t.Errorf("mode changed on the second run: %s then %s", first, second)
+	}
+}
+
+// TestReservedE2EIsStillMadeExecutable covers the one declared program the
+// installer never runs.
+//
+// spec.capi.e2e is reserved: nothing in an install executes it. It is in the
+// executable set anyway, because the alternative is a payload that ships a
+// test entry point which validation then rejects as an undeclared executable
+// -- the declaration would make the payload worse. The consequence is that
+// declaring it obliges the payload to ship it, which is why a payload with no
+// bin/e2e must omit the key rather than name a path it does not have.
+func TestReservedE2EIsStillMadeExecutable(t *testing.T) {
+	root := writeExtracted(t, map[string]string{
+		"bin/controller":                 "ELF",
+		"bin/e2e":                        "ELF",
+		"infrastructure-components.yaml": "kind: CustomResourceDefinition\n",
+	})
+	d := descriptorFor("bin/controller", nil)
+	d.Spec.CAPI.E2E = &E2E{Program: "bin/e2e"}
+
+	if err := d.ApplyExecutableModes(root); err != nil {
+		t.Fatal(err)
+	}
+	if m := mode(t, filepath.Join(root, "bin/e2e")); m&0o111 == 0 {
+		t.Errorf("declared e2e program is not executable (%s)", m)
+	}
+	if err := d.Validate(root); err != nil {
+		t.Errorf("Validate rejected a payload declaring e2e: %v", err)
+	}
+}
+
+// TestDeclaredE2EMustExist is the other side of the same trade: every
+// declared path must be present, so a payload that names a test entry point
+// it does not ship fails at layout validation rather than at whatever later
+// point someone tries to use it.
+func TestDeclaredE2EMustExist(t *testing.T) {
+	root := writeExtracted(t, map[string]string{
+		"bin/controller":                 "ELF",
+		"infrastructure-components.yaml": "kind: CustomResourceDefinition\n",
+	})
+	d := descriptorFor("bin/controller", nil)
+	d.Spec.CAPI.E2E = &E2E{Program: "bin/e2e"}
+
+	err := d.ApplyExecutableModes(root)
+	if err == nil {
+		t.Fatal("ApplyExecutableModes passed with a declared e2e program absent")
+	}
+	if !strings.Contains(err.Error(), "bin/e2e") {
+		t.Errorf("got %v, want the missing path named", err)
 	}
 }

@@ -3,15 +3,14 @@ package clusterapi
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/installer/pkg/types"
-	externalvalidation "github.com/openshift/installer/pkg/types/external/validation"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 )
 
 func TestInfrastructureProviderNames(t *testing.T) {
@@ -92,62 +91,68 @@ func TestResolveDestDir(t *testing.T) {
 	})
 }
 
-// TestInstallConfigSnippet checks the snippet the way the installer will read
-// it: pasted into an install-config and parsed strictly. A snippet that merely
-// looks right is worthless -- the user only finds out at install time.
-func TestInstallConfigSnippet(t *testing.T) {
-	cases := []struct {
-		name string
-		dir  string
-	}{
-		{name: "an ordinary path", dir: "/artifacts"},
-		// Both of these are legal directory names and both defeat a snippet
-		// built with fmt.Sprintf: "#" truncates the value at the comment, and
-		// ": " stops the document parsing at all.
-		{name: "a path containing a hash", dir: "/tmp/a #b"},
-		{name: "a path containing a colon and space", dir: "/tmp/a: b"},
+// TestPayloadDescriptor checks the descriptor the way a payload author will
+// use it: parsed by the same loader the installer uses.
+//
+// A skeleton that merely looks right is worthless -- the author only finds out
+// when the installer refuses their image.
+func TestPayloadDescriptor(t *testing.T) {
+	extracted := &ExtractedProvider{
+		Name:           "aws",
+		BinaryPath:     filepath.Join("/artifacts", "cluster-api-provider-aws"),
+		ComponentsPath: filepath.Join("/artifacts", "aws-infrastructure-components.yaml"),
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			extracted := &ExtractedProvider{
-				Name:           "aws",
-				BinaryPath:     filepath.Join(tc.dir, "cluster-api-provider-aws"),
-				ComponentsPath: filepath.Join(tc.dir, "aws-infrastructure-components.yaml"),
-			}
+	var d payload.Descriptor
+	// UnmarshalStrict with DisallowUnknownFields is what the descriptor
+	// loader uses. Lax parsing here would accept a misspelled field.
+	require.NoError(t, yaml.UnmarshalStrict([]byte(extracted.PayloadDescriptor()), &d, yaml.DisallowUnknownFields))
 
-			// The snippet is a fragment, so it is pasted where the command
-			// tells the user to paste it before being parsed.
-			doc := "platform:\n  external:\n" + extracted.InstallConfigSnippet()
+	assert.Equal(t, payload.APIVersion, d.APIVersion)
+	assert.Equal(t, payload.Kind, d.Kind)
+	// metadata.name must equal platform.external.platformName, and the
+	// install is refused if they differ -- so the name of the provider that
+	// was extracted is the only defensible value to pre-fill.
+	assert.Equal(t, "aws", d.Metadata.Name)
+	assert.Equal(t, "bin/controller", d.Spec.CAPI.Controller)
+	assert.Equal(t, "infrastructure-components.yaml", d.Spec.CAPI.InfrastructureComponents)
 
-			var ic types.InstallConfig
-			// UnmarshalStrict with DisallowUnknownFields is what
-			// installconfigbase.go:48 uses. Lax parsing here would accept a
-			// misspelled field and a duplicate key.
-			require.NoError(t, yaml.UnmarshalStrict([]byte(doc), &ic, yaml.DisallowUnknownFields))
-
-			require.NotNil(t, ic.Platform.External)
-			require.NotNil(t, ic.Platform.External.ClusterAPI)
-			assert.Equal(t, "aws", ic.Platform.External.ClusterAPI.Name)
-			assert.Equal(t, extracted.BinaryPath, ic.Platform.External.ClusterAPI.BinaryPath)
-			assert.Equal(t, extracted.ComponentsPath, ic.Platform.External.ClusterAPI.ComponentsPath)
-
-			// Shape validation must pass too, or the user gets to the next
-			// error rather than to an install.
-			assert.Empty(t, externalvalidation.ValidatePlatform(ic.Platform.External, field.NewPath("platform", "external"), &ic))
-		})
+	// The host paths are a comment, not a field. A descriptor that named them
+	// would look like it could work unedited, and it cannot: a payload's paths
+	// are relative to the payload root.
+	for _, path := range []string{extracted.BinaryPath, extracted.ComponentsPath} {
+		assert.Contains(t, extracted.PayloadDescriptor(), "#   ")
+		assert.Contains(t, extracted.PayloadDescriptor(), path)
 	}
+	assert.NotContains(t, d.Spec.CAPI.Controller, "/artifacts")
+	assert.NotContains(t, d.Spec.CAPI.InfrastructureComponents, "/artifacts")
 }
 
-// TestInstallConfigSnippetIsAFragment pins the reason the snippet is not a
-// whole platform block: an install-config already has one, and the installer's
-// strict parser rejects a duplicate key outright rather than merging.
-func TestInstallConfigSnippetIsAFragment(t *testing.T) {
-	snippet := (&ExtractedProvider{Name: "aws", BinaryPath: "/a", ComponentsPath: "/b"}).InstallConfigSnippet()
-	assert.NotContains(t, snippet, "platform:")
+// TestPayloadDescriptorArgsCarryTheRenderTokens pins the part of the skeleton
+// a copy cannot guess.
+//
+// The payload owns the controller's whole command line now, so a descriptor
+// that omitted a token would start a controller whose webhook the installer
+// never reaches -- a late, obscure failure. The installer requires
+// {{.WebhookPort}} and {{.WebhookCertDir}} exactly once each and appends
+// --kubeconfig itself, so a skeleton that does not satisfy its own validator
+// is worse than no skeleton.
+func TestPayloadDescriptorArgsCarryTheRenderTokens(t *testing.T) {
+	var d payload.Descriptor
+	require.NoError(t, yaml.Unmarshal(
+		[]byte((&ExtractedProvider{Name: "aws"}).PayloadDescriptor()), &d))
 
-	duplicated := "platform:\n  external:\n    platformName: aws\nplatform:\n  external: {}\n"
-	var ic types.InstallConfig
-	require.Error(t, yaml.UnmarshalStrict([]byte(duplicated), &ic),
-		"a duplicate platform key must be an error, or this snippet need not be a fragment")
+	args := d.Spec.CAPI.ControllerArgs
+	require.NotEmpty(t, args)
+	for _, token := range []string{payload.TokenWebhookPort, payload.TokenWebhookCertDir} {
+		n := 0
+		for _, a := range args {
+			n += strings.Count(a, token)
+		}
+		assert.Equal(t, 1, n, "token %s must appear exactly once in %v", token, args)
+	}
+	for _, a := range args {
+		assert.NotEqual(t, "--kubeconfig", strings.SplitN(a, "=", 2)[0],
+			"the installer appends --kubeconfig; a payload must not declare it")
+	}
 }

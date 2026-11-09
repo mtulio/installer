@@ -91,3 +91,23 @@ const ExtraManifestDir string = "extra-manifests"
 // directory exists, is writable, and survives from `create cluster` to
 // `destroy cluster` in the same install directory.
 const HookStateDir string = "hook-state"
+
+// HookLogDir is the directory, relative to the install directory, holding one
+// log file per hook phase.
+//
+// A hook's output does not go to the installer log. The ignition hook's
+// natural debug line is the pre-signed URL it just minted, which is a bearer
+// credential over every secret in the bootstrap ignition, and
+// .openshift_install.log is the file users attach to support cases and CI
+// publishes as an artifact. Nothing the installer can do to the text would be
+// reliable -- a URL is only one of the shapes a secret takes -- so the output
+// is kept out of that file entirely instead.
+//
+// It applies to every phase rather than only to ignition. A per-phase
+// exception would be a rule nobody can state from the hook's side, and the
+// phases that do not touch ignition still handle cloud credentials.
+//
+// The cost is real and is accepted: a failing hook's last words no longer
+// appear in the installer log or in CI job output, only the path to them. The
+// installer logs the program, its SHA-256, the exit code and that path.
+const HookLogDir string = ".external-hooks"

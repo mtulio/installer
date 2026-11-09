@@ -24,8 +24,9 @@ type ExternalProviderSpec struct {
 	// BinarySHA256 is the hex-encoded digest of BinaryPath, recorded so that a
 	// run can be traced back to an exact build.
 	BinarySHA256 string
-	// Args are appended to the controller command line after the arguments the
-	// installer supplies itself.
+	// Args is the controller's whole command line, less the --kubeconfig the
+	// local control plane appends. The installer contributes no flags of its
+	// own: see externalInfrastructureController.
 	Args []string
 }
 
@@ -117,8 +118,13 @@ func SetExternalProviderFromMetadata(md *external.Metadata) error {
 			external.Name)
 	}
 
+	// The name is the platform's, not a second field of its own. A provider
+	// payload's metadata.name is required to equal platformName, so recording
+	// it again under ClusterAPI could only ever be a spelling that disagrees
+	// with this one -- and this is the one `destroy cluster` already reads to
+	// pick the platform.
 	return SetExternalProvider(&ExternalProviderSpec{
-		Name:           md.ClusterAPI.Name,
+		Name:           md.PlatformName,
 		BinaryPath:     md.ClusterAPI.BinaryPath,
 		ComponentsPath: md.ClusterAPI.ComponentsPath,
 		Args:           md.ClusterAPI.Args,
@@ -144,19 +150,23 @@ func getExternalProvider() *ExternalProviderSpec {
 // install-config, which is what makes it useful for swapping a build without
 // editing the install-config.
 //
-// The argument list is deliberately the smallest set every Cluster API
-// provider is expected to accept. Whether that is genuinely true of providers
-// other than the ones tested here is unproven; spec.Args exists so that a
-// provider needing more can be configured without a code change. Note that
-// runController also appends --kubeconfig, which is therefore required too.
+// The argument list is taken whole from spec.Args and nothing is injected.
+// This used to prepend the four flags the installer considered universal and
+// append the provider's, which was wrong in a way that only a non-integrated
+// provider could show: append cannot remove. CAPOCI declares
+// --health-probe-bind-address rather than --health-addr and exits non-zero on
+// an unknown flag, so the injected spelling made the controller unstartable
+// and no configuration could take it back out.
+//
+// Every integrated provider already owns its full list -- compare
+// system.go:345 for AWS with :381 for Nutanix, which disagree on exactly that
+// flag -- so this makes the external path the same shape as the rest of this
+// file rather than a second mechanism.
+//
+// runController still appends --kubeconfig (system.go:703-705), and the
+// payload is validated not to declare it.
 func (c *system) externalInfrastructureController(spec *ExternalProviderSpec) *controller {
-	args := []string{
-		"-v=2",
-		"--health-addr={{suggestHealthHostPort}}",
-		"--webhook-port={{.WebhookPort}}",
-		"--webhook-cert-dir={{.WebhookCertDir}}",
-	}
-	args = append(args, spec.Args...)
+	args := append([]string(nil), spec.Args...)
 
 	return &controller{
 		Provider:    &Provider{Name: spec.Name},

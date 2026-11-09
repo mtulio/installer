@@ -73,7 +73,6 @@ func buildRequest(
 	req := hooks.Request{
 		Kind:                     kind,
 		Program:                  hook.Program,
-		Args:                     hook.Args,
 		ProgramRoot:              hookRoot(kind),
 		InstallDir:               command.RootOpts.Dir,
 		InfraID:                  infraID,
@@ -103,40 +102,39 @@ func buildRequest(
 
 // configuredHooks returns the hooks that will run, or nil.
 //
-// A provider payload declares its own, and a payload that ships a hook is the
-// ordinary case for this mode: the hook is the half of the provider's
+// Only a provider payload declares hooks, and a payload that ships one is the
+// ordinary case for this platform: the hook is the half of the provider's
 // integration that Cluster API has no contract for, so shipping the controller
-// without it would be shipping half an answer. The resolution has already
-// decided how a payload's declaration and the install-config's combine -- see
-// payload.Resolve -- so there is one rule for it and this reads the result.
-func configuredHooks(ic *installconfig.InstallConfig) *externaltypes.Hooks {
+// without it would be shipping half an answer.
+//
+// The install-config used to be able to name one too, and could not any more:
+// a payload's hooks and its templates are written together and have to agree,
+// so a second place to name one was a way for them to disagree. The parameter
+// is kept because every caller has it and a future precondition check would
+// want it.
+func configuredHooks(_ *installconfig.InstallConfig) *externaltypes.Hooks {
 	if res := payload.Resolved(); res != nil {
 		return res.Hooks
 	}
-	if ic == nil || ic.Config == nil || ic.Config.Platform.External == nil {
-		return nil
-	}
-	capi := ic.Config.Platform.External.ClusterAPI
-	if capi == nil {
-		return nil
-	}
-	return capi.Hooks
+	return nil
 }
 
 // hookRoot is the directory this hook's program is resolved against: the
 // payload's extraction directory when the payload supplied it, and the
 // External manifest directory otherwise. The empty string means the latter.
 //
-// It is asked per hook rather than once per install because the answer differs
-// per hook. A payload may declare an infraReady hook and the install-config
-// override postProvision; the two then live in different directories, and
-// answering with one root for both sends one of them somewhere it is not.
+// It is asked per hook rather than once per install. Every root is the same
+// directory now that only a payload declares hooks, but the shape is what
+// metadata.json records and narrowing it would be a change to a file `destroy
+// cluster` reads.
 func hookRoot(kind hooks.Kind) string {
 	res := payload.Resolved()
 	if res == nil {
 		return ""
 	}
 	switch kind {
+	case hooks.Ignition:
+		return res.HookRoots.Ignition
 	case hooks.InfraReady:
 		return res.HookRoots.InfraReady
 	case hooks.PostProvision:
@@ -166,7 +164,7 @@ func warnNoInfraReadyHook(ic *installconfig.InstallConfig) {
 	if ic != nil && ic.Config != nil {
 		domain = ic.Config.ClusterDomain()
 	}
-	logrus.Warnf("No platform.external.clusterAPI.hooks.infraReady is configured, so the installer is "+
+	logrus.Warnf("The provider payload declares no infraReady hook, so the installer is "+
 		"creating no DNS for this cluster. api-int.%s must resolve to the internal API load balancer before "+
 		"the control plane can start: the bootstrap node resolves it to reach its own API server, and every "+
 		"control-plane machine fetches its ignition from it on port 22623. If nothing else creates that "+

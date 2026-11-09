@@ -30,7 +30,7 @@ func prepareExtracted(t *testing.T, ref, digest string) (installDir, root string
 
 func optionsFor(ref, installDir string) ResolveOptions {
 	return ResolveOptions{
-		Provider:   &external.ClusterAPIProvider{Controller: &external.Controller{Image: ref}},
+		Provider:   &external.ClusterAPIProvider{PayloadImage: ref},
 		InstallDir: installDir,
 	}
 }

@@ -9,9 +9,9 @@ import (
 )
 
 // TestHooksFromLegacyMetadata is a regression test for a real failure: a
-// cluster created before hooks carried arguments records them in metadata.json
-// as plain strings, and `destroy cluster` built after the change could not
-// read its own install directory --
+// cluster created before Hook became an object records its hooks in
+// metadata.json as plain strings, and `destroy cluster` built after the change
+// could not read its own install directory --
 //
 //	json: cannot unmarshal string into Go struct field
 //	Hooks.clusterAPI.hooks.infraReady of type external.Hook
@@ -32,16 +32,25 @@ func TestHooksFromLegacyMetadata(t *testing.T) {
 			},
 		},
 		"objects": {
-			json: `{"postProvision":{"program":"hooks/dns.sh","args":["--input-dns-zone=Z1"]}}`,
+			json: `{"postProvision":{"program":"hooks/dns.sh"}}`,
 			want: Hooks{
-				PostProvision: &Hook{Program: "hooks/dns.sh", Args: []string{"--input-dns-zone=Z1"}},
+				PostProvision: &Hook{Program: "hooks/dns.sh"},
+			},
+		},
+		// bootstrapOutputPath is the one field besides program, and it is
+		// carried only by ignition. It reaches metadata.json like the
+		// rest, so destroy must be able to read a directory that has one.
+		"ignition carries its output path": {
+			json: `{"ignition":{"program":"hooks/stage.sh","bootstrapOutputPath":"pointer.ign"}}`,
+			want: Hooks{
+				Ignition: &Hook{Program: "hooks/stage.sh", BootstrapOutputPath: "pointer.ign"},
 			},
 		},
 		"mixed": {
-			json: `{"infraReady":"hooks/dns.sh","postProvision":{"program":"hooks/dns.sh","args":["--x"]}}`,
+			json: `{"infraReady":"hooks/dns.sh","postProvision":{"program":"hooks/dns.sh"}}`,
 			want: Hooks{
 				InfraReady:    &Hook{Program: "hooks/dns.sh"},
-				PostProvision: &Hook{Program: "hooks/dns.sh", Args: []string{"--x"}},
+				PostProvision: &Hook{Program: "hooks/dns.sh"},
 			},
 		},
 	} {

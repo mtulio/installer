@@ -10,10 +10,9 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/installer/data"
-	externaltypes "github.com/openshift/installer/pkg/types/external"
+	"github.com/openshift/installer/pkg/infrastructure/external/payload"
 )
 
 // InfrastructureProviderNames returns the extractable provider names, sorted.
@@ -171,36 +170,42 @@ func resolveDestDir(destDir string) (string, error) {
 	return dir, nil
 }
 
-// InstallConfigSnippet renders the `clusterAPI` block that points at the
-// extracted artifacts, indented ready to paste under `platform.external`.
+// PayloadDescriptor renders an ExternalProviderPayload descriptor naming the
+// extracted artifacts, as a starting point for a payload repository.
 //
-// It is deliberately a fragment rather than a whole `platform:` block. Every
-// install-config already has a `platform:` key, and the installer parses with
-// UnmarshalStrict (pkg/asset/installconfig/installconfigbase.go:48), which
-// rejects a duplicate key outright -- so a snippet the user was told to "add"
-// would break the file it was added to.
+// This used to print an install-config snippet, because
+// platform.external.clusterAPI accepted the two paths directly. It no longer
+// does: a provider is supplied as one payload image, so extracted artifacts
+// are not something to point at any more, they are something to build from.
+// The paths below are on this host and a real descriptor's are relative to the
+// payload root, which is why they appear in a comment rather than in the
+// fields -- pasting this file unedited must not look like it could work.
 //
-// The values are marshalled rather than formatted into a string. A path
-// containing "#" is truncated at that point by any YAML parser, and one
-// containing ": " fails to parse at all; both are legal directory names and
-// both would produce a confusing failure far from here.
-func (e *ExtractedProvider) InstallConfigSnippet() string {
-	body, err := yaml.Marshal(externaltypes.ClusterAPIProvider{
-		Name:           e.Name,
-		BinaryPath:     e.BinaryPath,
-		ComponentsPath: e.ComponentsPath,
-	})
-	if err != nil {
-		// Marshalling four strings cannot fail; reporting the paths plainly
-		// is better than losing them.
-		return fmt.Sprintf("name: %s\nbinaryPath: %s\ncomponentsPath: %s\n",
-			e.Name, e.BinaryPath, e.ComponentsPath)
-	}
-
-	// platform.external.clusterAPI sits four spaces in, and its fields six.
-	lines := []string{"    clusterAPI:"}
-	for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
-		lines = append(lines, "      "+line)
-	}
-	return strings.Join(lines, "\n") + "\n"
+// spec.capi.controllerArgs is the part a copy cannot guess. The list here is
+// what this installer passes its own integrated providers; that is right for a
+// provider extracted from this installer, and for anything else it is exactly
+// the thing to check against the provider's own flags.
+func (e *ExtractedProvider) PayloadDescriptor() string {
+	return fmt.Sprintf(`apiVersion: %s
+kind: %s
+metadata:
+  # Must equal platform.external.platformName in install-config.yaml.
+  name: %s
+spec:
+  compatibility:
+    kubernetes:
+      min: "CHANGE-ME"
+      max: "CHANGE-ME"
+  capi:
+    # Relative to the payload root. Extracted on this host to:
+    #   controller: %s
+    #   components: %s
+    controller: bin/controller
+    controllerArgs:
+    - -v=2
+    - --health-addr={{suggestHealthHostPort}}
+    - --webhook-port={{.WebhookPort}}
+    - --webhook-cert-dir={{.WebhookCertDir}}
+    infrastructureComponents: infrastructure-components.yaml
+`, payload.APIVersion, payload.Kind, e.Name, e.BinaryPath, e.ComponentsPath)
 }

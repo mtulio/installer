@@ -55,92 +55,101 @@ func (p *Platform) ProvisionsWithClusterAPI() bool {
 }
 
 // ClusterAPIProvider describes the Cluster API infrastructure provider that
-// provisions the cluster's infrastructure. The installer starts the named
-// controller against its temporary, local Cluster API control plane and
-// applies the manifests the user supplies in the install directory; it has no
-// knowledge of the provider's API and does not generate manifests for it.
+// provisions the cluster's infrastructure. Every artifact comes from one OCI
+// image the provider publishes -- the controller, its components bundle, both
+// template trees and the install hooks -- and the installer starts that
+// controller against its temporary, local Cluster API control plane. The
+// installer has no knowledge of the provider's API and generates no manifests
+// for it.
+//
+// The stanza is deliberately small. A conforming payload needs PayloadImage
+// and whatever Variables its templates declare, and nothing else: the three
+// path fields select between things the payload already shipped,
+// ControllerExtraArgs is for debugging, and BootstrapIgnitionStaging is
+// consent a payload has to ask for.
 type ClusterAPIProvider struct {
-	// Name identifies the provider, for example "oci". It names the controller
-	// in installer logs and in the developer-only artifact override
-	// environment variables.
-	Name string `json:"name"`
-
-	// BinaryPath is a path on the machine running the installer to the provider
-	// controller executable.
+	// PayloadImage is a fully qualified reference to the provider payload
+	// image. A digest is required for a mirrored or disconnected install --
+	// imageDigestSources redirects by digest -- and accepted everywhere; a tag
+	// is accepted for a connected install, because the install log records the
+	// digest it resolved to.
 	//
-	// Required when the provider is supplied as local paths, which is the
-	// default. It must not be set when Controller.SourceType is "image": the
-	// payload supplies the controller, and mixing the two would make it
-	// ambiguous which binary runs.
-	// +optional
-	BinaryPath string `json:"binaryPath,omitempty"`
-
-	// ComponentsPath is a path on the machine running the installer to the
-	// provider's CRDs and component manifests, either a single YAML file or a
-	// directory of them.
+	// One field rather than a struct: the image carries the controller binary,
+	// the hooks, both template trees and the descriptor, so naming it after
+	// the controller would name it after one of its parts.
 	//
-	// Required when the provider is supplied as local paths, and must not be
-	// set when Controller.SourceType is "image", as for BinaryPath.
-	// +optional
-	ComponentsPath string `json:"componentsPath,omitempty"`
-
-	// Args are appended to the provider controller's command line, after the
-	// arguments the installer supplies itself. Use it for flags a particular
-	// provider requires and the installer does not know about.
+	// There is no provider-name field. The payload's metadata.name is required
+	// to equal PlatformName above, which cluster metadata already records, so
+	// `destroy cluster` reaches the same provider without a third spelling of
+	// the same string.
 	//
-	// This is the original spelling and continues to work. Controller.Args is
-	// the same setting in the newer, grouped form; setting both is an error
-	// rather than a merge, because two places to write one list is how the two
-	// silently drift apart.
-	// +optional
-	Args []string `json:"args,omitempty"`
+	// Authentication reuses pullSecret and redirection reuses
+	// imageDigestSources. Neither needs a new field here.
+	PayloadImage string `json:"payloadImage"`
 
-	// Hooks names programs the installer runs at fixed points in the install.
+	// ControllerExtraArgs are appended to the controller's command line after
+	// the payload's own spec.capi.controllerArgs, with the last occurrence of
+	// a flag winning -- so "-v=5" here raises verbosity for a support case
+	// without repackaging the payload image.
+	//
+	// Genuinely extra: the payload, not this field, owns the baseline. A
+	// provider's flag names are the provider's knowledge and belong in the
+	// payload; this exists for the operator's debugging, not for making a
+	// payload work. An entry containing a {{...}} token is rejected, because
+	// the installer's render inputs are not a user interface.
 	// +optional
-	Hooks *Hooks `json:"hooks,omitempty"`
+	ControllerExtraArgs []string `json:"controllerExtraArgs,omitempty"`
 
-	// Controller selects where the provider controller comes from.
+	// BootstrapIgnitionStaging is the cluster creator's consent to the
+	// payload's ignition hook -- the only hook handed the cluster's
+	// bootstrap ignition, and therefore its day-0 secret material. A payload
+	// declaring that hook while this is unset or "Disabled" is refused.
 	//
-	// When it is unset, or its SourceType is "local", the installer reads
-	// BinaryPath and ComponentsPath and behaves exactly as it did before this
-	// field existed. When SourceType is "image", every artifact instead comes
-	// out of one OCI image published by the provider, and no local path is
-	// consulted.
+	// The refusal cannot happen at install-config validation, because the hook
+	// is declared by the payload and the payload is not available until it has
+	// been pulled. It happens at the first point after the payload is read --
+	// PreProvision, before the local control plane starts and before any cloud
+	// resource is created -- and again at the handover itself. A payload that
+	// does not declare the hook is unaffected either way, so the field is inert
+	// for the common case and nothing an ordinary partner's users have to set.
 	//
-	// The two are modes of one field set rather than two field sets, so a user
-	// moving between them changes SourceType and the artifacts, not the shape
-	// of their configuration.
+	// An enum rather than a bool so that a narrower permission -- allowed only
+	// from a signed payload, say -- is a third value rather than a second
+	// field. Unset is treated as "Disabled".
+	// +kubebuilder:validation:Enum=Disabled;Allowed
 	// +optional
-	Controller *Controller `json:"controller,omitempty"`
+	BootstrapIgnitionStaging BootstrapIgnitionStaging `json:"bootstrapIgnitionStaging,omitempty"`
 
 	// CapiInstallerPath is the directory the provider payload is extracted
-	// into, and the root every other path below is resolved against.
+	// into, and the root the two paths below are resolved against.
 	//
-	// Defaults to the "capi-installer" directory of the install directory.
-	// Only meaningful when Controller.SourceType is "image".
+	// Relative to the install directory and required to stay inside it, so
+	// that the artifacts `destroy cluster` depends on travel with the
+	// directory the user keeps. Defaults to "capi-installer".
 	// +optional
 	CapiInstallerPath string `json:"capiInstallerPath,omitempty"`
 
-	// CustomResource is the single bundle manifest the local Cluster API
-	// control plane loads -- the provider's CRDs and webhook configurations.
+	// InfrastructureComponents is the single bundle manifest the local Cluster
+	// API control plane loads -- the provider's CRDs and webhook
+	// configurations.
 	//
 	// A single file rather than a directory, because every clusterctl provider
 	// already publishes exactly one infrastructure-components.yaml. Defaults
-	// to what the payload's own layout declares, so a conforming payload needs
-	// no path configuration at all.
+	// to what the payload's own descriptor declares, so a conforming payload
+	// needs no path configuration at all.
 	// +optional
-	CustomResource string `json:"customResource,omitempty"`
+	InfrastructureComponents string `json:"infrastructureComponents,omitempty"`
 
-	// ManifestPath is the directory of day-0 manifest templates the installer
-	// renders and folds into the install directory's manifests, to be applied
-	// during bootstrap.
+	// ManifestTemplates is the directory of day-0 manifest templates the
+	// installer renders and folds into the install directory's manifests, to
+	// be applied during bootstrap.
 	//
-	// Defaults to what the payload's layout declares. These reach the
+	// Defaults to what the payload's descriptor declares. These reach the
 	// installed cluster, unlike the Cluster API templates alongside them,
 	// which are applied only to the installer's local, ephemeral control
 	// plane.
 	// +optional
-	ManifestPath string `json:"manifestPath,omitempty"`
+	ManifestTemplates string `json:"manifestTemplates,omitempty"`
 
 	// Variables supply values for the substitution tokens in the payload's
 	// template trees. The installer uses clusterctl's syntax -- ${VAR},
@@ -156,86 +165,43 @@ type ClusterAPIProvider struct {
 	// resolves, fails validation before any cloud call -- consistent with
 	// clusterctl's own behaviour on an unset required variable.
 	//
-	// Do not put a credential in one. These are recorded in the install log.
+	// Do not put a credential in one. These names are recorded in the install
+	// log.
 	// +optional
 	Variables map[string]string `json:"variables,omitempty"`
 }
 
-// ControllerSourceType selects where the provider's artifacts come from.
-type ControllerSourceType string
+// BootstrapIgnitionStaging is the cluster creator's answer to a payload that
+// asks to handle the bootstrap ignition itself.
+type BootstrapIgnitionStaging string
 
 const (
-	// ControllerSourceTypeLocal reads the controller and its components from
-	// paths on the machine running the installer. This is the default and is
-	// the behaviour that existed before payload images were supported.
-	ControllerSourceTypeLocal ControllerSourceType = "local"
+	// BootstrapIgnitionStagingDisabled refuses a payload that declares an
+	// ignition hook. It is the behaviour of an unset field.
+	BootstrapIgnitionStagingDisabled BootstrapIgnitionStaging = "Disabled"
 
-	// ControllerSourceTypeImage reads every artifact from an OCI image the
-	// provider publishes through their own release process.
-	ControllerSourceTypeImage ControllerSourceType = "image"
+	// BootstrapIgnitionStagingAllowed permits the payload's ignition hook
+	// to be handed the cluster's bootstrap ignition.
+	BootstrapIgnitionStagingAllowed BootstrapIgnitionStaging = "Allowed"
 )
 
-// Controller describes the provider controller and where it is obtained from.
-//
-// The installer validates the payload's structure, not its content: it checks
-// that the declared layout is present and that the declared compatibility
-// range admits this release. It does not inspect, scan or attest the
-// controller, the manifests or the hooks. What is inside is established by the
-// provider's release process, which is the trust boundary.
-type Controller struct {
-	// SourceType is "local" or "image", and exactly one set of fields applies
-	// to each. It defaults to "local".
-	// +kubebuilder:validation:Enum=local;image
-	// +kubebuilder:default:="local"
-	// +default="local"
-	// +optional
-	SourceType ControllerSourceType `json:"sourceType,omitempty"`
-
-	// Image is the payload image reference, required when SourceType is
-	// "image" and rejected otherwise.
-	//
-	// The reference must be fully qualified. A tag is accepted for a connected
-	// install: the install log records the resolved digest and the artifact
-	// checksum, so a tagged install stays traceable after the fact even though
-	// it is not reproducible from the install-config alone. A mirrored install
-	// must pin a digest, because imageDigestSources redirects by digest.
-	//
-	// Authentication reuses pullSecret and redirection reuses
-	// imageDigestSources. Neither needs a new field here.
-	// +optional
-	Image string `json:"image,omitempty"`
-
-	// Path is an alternative spelling of BinaryPath for SourceType "local",
-	// so that a local configuration can be written in the same grouped form as
-	// an image one. Setting both is an error.
-	// +optional
-	Path string `json:"path,omitempty"`
-
-	// Args are appended to the controller's command line, after the arguments
-	// the installer supplies itself. Equivalent to ClusterAPIProvider.Args;
-	// setting both is an error.
-	// +optional
-	Args []string `json:"args,omitempty"`
+// AllowsBootstrapIgnitionStaging reports whether the cluster creator consented
+// to the ignition hook. A nil receiver and an unset field both report
+// false, so the absence of an answer is never read as a yes.
+func (p *ClusterAPIProvider) AllowsBootstrapIgnitionStaging() bool {
+	return p != nil && p.BootstrapIgnitionStaging == BootstrapIgnitionStagingAllowed
 }
 
-// SourceTypeOrDefault reports the configured source type, treating an unset
-// Controller and an unset SourceType as "local".
+// UsesImagePayload reports whether a payload image is configured. A nil
+// receiver reports false.
 //
-// Every caller that has to tell the two modes apart goes through this, for the
-// same reason ProvisionsWithClusterAPI exists: the pre-existing local-path
-// behaviour has to survive unchanged, and it only does if the condition cannot
-// drift between call sites.
-func (c *Controller) SourceTypeOrDefault() ControllerSourceType {
-	if c == nil || c.SourceType == "" {
-		return ControllerSourceTypeLocal
-	}
-	return c.SourceType
-}
-
-// UsesImagePayload reports whether the provider's artifacts come from an OCI
-// image rather than from local paths. A nil receiver reports false.
+// PayloadImage is required whenever ClusterAPI is set, so in a valid
+// install-config this agrees with ProvisionsWithClusterAPI. It stays a
+// separate predicate because the callers that use it run before validation or
+// on a configuration they did not validate themselves, and an empty reference
+// there means "nothing to pull", not "pull nothing".
 func (p *ClusterAPIProvider) UsesImagePayload() bool {
-	return p != nil && p.Controller.SourceTypeOrDefault() == ControllerSourceTypeImage
+	return p != nil && p.PayloadImage != ""
 }
 
 // Hooks names programs the installer runs at points in the flow where an
@@ -258,6 +224,23 @@ func (p *ClusterAPIProvider) UsesImagePayload() bool {
 // non-Cluster-API External CI does with CloudFormation -- so an absent hook
 // is a warning naming the consequence, never an error.
 type Hooks struct {
+	// Ignition is run after the cluster's infrastructure reports ready and
+	// before any machine is created. The network and the load balancers exist
+	// by then; no compute does. It is named for the installer's
+	// IgnitionProvider point of extension, which is where the integrated
+	// providers stage an oversized bootstrap ignition too.
+	//
+	// It is the one hook whose output the installer reads back. A provider
+	// whose controller cannot stage an oversized bootstrap ignition itself
+	// uses it to write a replacement -- a pointer config over an object the
+	// hook staged -- which the installer then publishes in place of its own.
+	//
+	// It is also the only hook handed the cluster's day-0 secret material,
+	// which is why a payload declaring it is refused unless the cluster
+	// creator set clusterAPI.bootstrapIgnitionStaging to "Allowed".
+	// +optional
+	Ignition *Hook `json:"ignition,omitempty"`
+
 	// InfraReady is run once the Cluster reports
 	// status.infrastructureReady, after the provider has created the network
 	// and load balancers and before any machine is created. It is the point
@@ -294,40 +277,35 @@ type Hooks struct {
 	PreDestroy *Hook `json:"preDestroy,omitempty"`
 }
 
-// Hook is one program and the arguments the installer passes to it.
+// Hook is one program the installer execs at a phase of the install.
 //
-// The installer execs the program directly, without a shell, and hands it
-// Args as its argv. It does not parse, expand, template or interpret any of
-// them: an argument is a string the user wrote and the program reads.
+// The installer runs it directly, without a shell, and passes it no
+// arguments. Everything a hook is told is environment: the cluster's
+// identity, the install directory, the Cluster API objects as files. That is
+// the whole contract, and it is the same for every phase.
 //
-// Arguments rather than more environment variables, and rather than a shell
-// command line, is a deliberate choice about who owns the contract. The
-// installer's own inputs -- the cluster's identity, the install directory,
-// the Cluster API objects -- are environment, because they are the same for
-// every hook and the installer knows what they mean. Everything that is
-// specific to one partner's automation is argv, because the installer does
-// not know what it means and should not have to. A program whose whole input
-// is flags is also a program that can be a compiled binary as easily as a
-// script, and can be run by hand from a terminal with the same arguments the
-// installer used, which is what makes a failed hook debuggable.
+// It used to take an argv, from a time when the install-config named hooks
+// directly and a user needed somewhere to put their own flags. A payload
+// declares its hooks instead, and a payload's hooks and its programs are
+// written by the same person, so a second channel for them to talk to each
+// other was a field that could only drift from what the scripts expected.
+// Its removal also closes an exposure: the installer logged a hook's
+// arguments, and there are none left to log.
 type Hook struct {
-	// Program is a path to an executable, relative to the External manifest
-	// directory in the install directory. It must stay inside that
-	// directory: the install directory is the unit a user copies, archives
-	// and hands to someone else, and a hook reaching outside it would run
-	// something that did not travel with it.
+	// Program is a path to an executable, relative to the directory the hook
+	// is rooted at -- the extraction directory for a payload's own hooks. It
+	// must stay inside that directory: the install directory is the unit a
+	// user copies, archives and hands to someone else, and a hook reaching
+	// outside it would run something that did not travel with it.
 	Program string `json:"program"`
 
-	// Args are passed to Program as its arguments, in order and verbatim.
+	// BootstrapOutputPath is set on Ignition alone, and is the file the
+	// installer reads back after that hook returns -- relative to a directory
+	// the installer creates for the hook and removes afterwards.
 	//
-	// Prefer long flags with an explicit value, `--input-dns-zone=Z123` or
-	// `--input-dns-zone Z123`, over positional arguments: the reference hook
-	// for this pilot is a script today and may be a binary tomorrow, and a
-	// flag survives that change where a position does not.
-	//
-	// These are written to the installer log and recorded in metadata.json so
-	// that `destroy cluster` can run the teardown half of the same
-	// automation. Do not put a credential in one.
+	// The partner names the file and the installer decides where it lives.
+	// Declared rather than fixed so that the installer has a name to validate
+	// and a name to put in a failure message.
 	// +optional
-	Args []string `json:"args,omitempty"`
+	BootstrapOutputPath string `json:"bootstrapOutputPath,omitempty"`
 }

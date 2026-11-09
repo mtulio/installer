@@ -33,88 +33,59 @@ func TestMetadataWithoutClusterAPI(t *testing.T) {
 	assert.Nil(t, got.ClusterAPI)
 }
 
-// TestMetadataRecordsWhatDestroyNeeds is the destroy-coverage test. Every
-// field asserted here exists because `destroy cluster` cannot proceed without
-// it and cannot recover it from anywhere else: the install-config that
-// carried it has been consumed by then.
-func TestMetadataRecordsWhatDestroyNeeds(t *testing.T) {
+// TestMetadataCopiesNothingFromTheInstallConfig pins the change that collapsed
+// the install-config to a payload image.
+//
+// The install-config used to carry the controller path, the components path,
+// the command line and the hooks, and this function copied each one into
+// metadata.json. None of them exist there any more: they are inside the
+// payload, and what destroy needs is where they were extracted to on this
+// host, which only the resolution knows. So a ClusterAPI block is recorded --
+// its presence is what tells destroy there is infrastructure to hand back --
+// and it is filled in from payload.Resolved(), not from here.
+//
+// Asserting the empty block matters because the failure it guards is silent:
+// a future edit that reads a path back out of the install-config would pass
+// every install where the two happen to agree, and write a wrong path into
+// metadata.json for every install where the payload was extracted elsewhere.
+func TestMetadataCopiesNothingFromTheInstallConfig(t *testing.T) {
 	got := Metadata(config(&external.Platform{
 		PlatformName: "somecloud",
 		ClusterAPI: &external.ClusterAPIProvider{
-			Name:           "reference",
-			BinaryPath:     "/opt/provider/controller",
-			ComponentsPath: "/opt/provider/components.yaml",
-			Args:           []string{"--feature-gates=Something=true"},
-			Hooks: &external.Hooks{
-				InfraReady: &external.Hook{Program: "hooks/infra-hook.sh"},
-				PostProvision: &external.Hook{
-					Program: "hooks/infra-hook.sh",
-					Args:    []string{"--input-dns-zone=Z1"},
-				},
-				PreDestroy: &external.Hook{Program: "hooks/infra-hook.sh"},
-			},
+			PayloadImage: "registry.example.com/provider/payload:v1",
+			Variables:    map[string]string{"REGION": "somewhere"},
 		},
 	}))
 
 	require.NotNil(t, got.ClusterAPI)
-	assert.Equal(t, "reference", got.ClusterAPI.Name)
-	assert.Equal(t, "/opt/provider/controller", got.ClusterAPI.BinaryPath)
-	assert.Equal(t, "/opt/provider/components.yaml", got.ClusterAPI.ComponentsPath)
-	assert.Equal(t, []string{"--feature-gates=Something=true"}, got.ClusterAPI.Args)
-
-	// Without the teardown hook, whatever the provisioning hook created --
-	// a DNS zone, by construction outside Cluster API's ownership -- leaks
-	// with nothing left in the install directory to identify it.
-	require.NotNil(t, got.ClusterAPI.Hooks)
-	require.NotNil(t, got.ClusterAPI.Hooks.PreDestroy)
-	assert.Equal(t, "hooks/infra-hook.sh", got.ClusterAPI.Hooks.PreDestroy.Program)
-
-	// The arguments travel with the program. A teardown hook told nothing of
-	// what its provisioning half was told cannot find the same resources:
-	// the hosted zone the wildcard record was created in is an argument, not
-	// something destroy can rediscover.
-	require.NotNil(t, got.ClusterAPI.Hooks.PostProvision)
-	assert.Equal(t, []string{"--input-dns-zone=Z1"}, got.ClusterAPI.Hooks.PostProvision.Args)
+	// No resolution was made in this process, so there is nothing to record.
+	// recordPayload returns early rather than writing empty strings, which is
+	// the same observable result and a deliberately different reason.
+	assert.Empty(t, got.ClusterAPI.BinaryPath)
+	assert.Empty(t, got.ClusterAPI.ComponentsPath)
+	assert.Empty(t, got.ClusterAPI.Args)
+	assert.Empty(t, got.ClusterAPI.Image)
+	assert.Empty(t, got.ClusterAPI.ImageDigest)
+	assert.Nil(t, got.ClusterAPI.Hooks)
 
 	// The teardown hook is handed the same cluster identity the provisioning
 	// hook was, and the base domain is the half of it that is not already in
-	// ClusterMetadata.
+	// ClusterMetadata. This one does come from the install-config.
 	assert.Equal(t, "test.example.com", got.BaseDomain)
+	assert.Equal(t, "somecloud", got.PlatformName)
 }
 
-// TestMetadataDoesNotAliasTheInstallConfig guards a mutation that would be
-// invisible until it corrupted metadata.json: this metadata is marshalled
-// long after the function returns, so sharing the install-config's memory
-// means a later edit to either shows up in the other.
-func TestMetadataDoesNotAliasTheInstallConfig(t *testing.T) {
-	hooks := &external.Hooks{
-		InfraReady: &external.Hook{Program: "hooks/a.sh"},
-		PreDestroy: &external.Hook{Program: "hooks/a.sh", Args: []string{"--zone=Z1"}},
-	}
-	args := []string{"--one"}
-	platform := &external.Platform{
-		ClusterAPI: &external.ClusterAPIProvider{Args: args, Hooks: hooks},
-	}
-
-	got := Metadata(config(platform))
-
-	hooks.PreDestroy.Program = "hooks/changed.sh"
-	hooks.PreDestroy.Args[0] = "--zone=changed"
-	args[0] = "--changed"
-
-	assert.Equal(t, "hooks/a.sh", got.ClusterAPI.Hooks.PreDestroy.Program)
-	assert.Equal(t, []string{"--zone=Z1"}, got.ClusterAPI.Hooks.PreDestroy.Args)
-	assert.Equal(t, []string{"--one"}, got.ClusterAPI.Args)
-}
-
-// TestMetadataWithoutHooks checks the common case: a provider configured with
-// no hooks at all records none, rather than an empty block that would suggest
-// destroy has something to run.
-func TestMetadataWithoutHooks(t *testing.T) {
+// TestMetadataWithoutPayloadImage covers a ClusterAPI block that names no
+// image. Validation refuses that before this code runs, so it is unreachable
+// in an install -- but recordPayload is reached through Metadata by anything
+// that builds a config in memory, and a nil-image block must not be treated as
+// a resolved payload.
+func TestMetadataWithoutPayloadImage(t *testing.T) {
 	got := Metadata(config(&external.Platform{
-		ClusterAPI: &external.ClusterAPIProvider{Name: "reference"},
+		ClusterAPI: &external.ClusterAPIProvider{},
 	}))
 
 	require.NotNil(t, got.ClusterAPI)
+	assert.Empty(t, got.ClusterAPI.BinaryPath)
 	assert.Nil(t, got.ClusterAPI.Hooks)
 }

@@ -45,9 +45,9 @@ type Metadata struct {
 // machine-local, which means destroy has to run somewhere the artifacts are
 // still reachable -- a real limitation, stated here rather than discovered.
 type ClusterAPIMetadata struct {
-	// Name identifies the provider. It names the controller in logs and
-	// selects the developer-only artifact override environment variables.
-	Name string `json:"name"`
+	// There is no provider-name field. PlatformName above is the name, and
+	// the payload's metadata.name is required to equal it, so a second
+	// spelling here could only ever disagree with the first.
 
 	// BinaryPath is the absolute path to the provider controller executable.
 	BinaryPath string `json:"binaryPath"`
@@ -63,9 +63,13 @@ type ClusterAPIMetadata struct {
 	// component manifests, either a file or a directory.
 	ComponentsPath string `json:"componentsPath"`
 
-	// Args are the extra arguments that were appended to the controller
-	// command line, repeated here so that destroy starts the provider the
-	// same way the install did.
+	// Args is the controller's whole command line as the install resolved it
+	// -- the payload's spec.capi.controllerArgs followed by the
+	// install-config's controllerExtraArgs -- recorded so that destroy starts
+	// the provider the same way the install did. The installer's render
+	// tokens are still in it unrendered, because the ports and the certificate
+	// directory belong to whichever local control plane is running, and
+	// destroy's is not the install's.
 	// +optional
 	Args []string `json:"args,omitempty"`
 

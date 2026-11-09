@@ -344,30 +344,47 @@ func (p Provider) PreProvision(ctx context.Context, in infracapi.PreProvisionInp
 			externaltypes.Name)
 	}
 
-	spec := &clusterapi.ExternalProviderSpec{
-		Name:           capi.Name,
-		BinaryPath:     capi.BinaryPath,
-		ComponentsPath: capi.ComponentsPath,
-		Args:           capi.Args,
-	}
-
-	// In image mode none of the three paths above is configured -- validation
-	// rejects a local path there -- and they come from the payload instead.
-	// The payload has already been resolved by this point, by whichever
-	// earlier stage needed it first; this call collects that answer rather
-	// than producing a second one.
+	// Everything comes from the payload: the install-config names an image
+	// and nothing else. The payload has usually been resolved already by this
+	// point, by whichever earlier stage needed it first, and this call
+	// collects that answer rather than producing a second one -- which for a
+	// floating tag would legitimately be a different image.
 	res, err := payload.ResolveForInstallConfig(ctx, in.InstallConfig.Config, command.RootOpts.Dir, in.InfraID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve the Cluster API provider payload: %w", err)
 	}
-	if res != nil {
-		spec.BinaryPath = res.ControllerPath
-		spec.ComponentsPath = res.ComponentsPath
-		spec.Args = res.Args
+	if res == nil {
+		return fmt.Errorf("platform.external.clusterAPI.payloadImage is required to provision infrastructure "+
+			"for the %s platform", externaltypes.Name)
+	}
+
+	// Refuse an unconsented ignition hook here, where refusing is free.
+	//
+	// The gate itself lives at the handover, in Ignition, which is where the
+	// bytes change hands. But that point is reached only after the network
+	// and the load balancers have been created, so a payload that declares
+	// the hook against an install-config that never allowed it would burn a
+	// full infrastructure provisioning before saying so -- for a mistake
+	// knowable the moment the payload is read.
+	if res.Hooks != nil && res.Hooks.Ignition != nil {
+		if err := checkIgnitionStagingConsent(capi); err != nil {
+			return err
+		}
+	}
+
+	// The provider is named by the platform. There is no second spelling: a
+	// payload's metadata.name is required to equal platformName, and this is
+	// the value metadata.json already records for the destroy path.
+	spec := &clusterapi.ExternalProviderSpec{
+		Name:           in.InstallConfig.Config.Platform.External.PlatformName,
+		BinaryPath:     res.ControllerPath,
+		ComponentsPath: res.ComponentsPath,
+		Args:           res.Args,
 	}
 
 	if err := clusterapi.SetExternalProvider(spec); err != nil {
-		return fmt.Errorf("failed to configure the %s Cluster API infrastructure provider: %w", capi.Name, err)
+		return fmt.Errorf("failed to configure the %s Cluster API infrastructure provider: %w",
+			spec.Name, err)
 	}
 	return nil
 }
