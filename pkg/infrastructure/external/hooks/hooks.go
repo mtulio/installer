@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -235,6 +236,24 @@ func Run(ctx context.Context, req Request) error {
 		// is up. A hook that needs it should say so when it is not usable
 		// rather than assume it is.
 		"OPENSHIFT_INSTALL_KUBECONFIG="+filepath.Join(installDir, "auth", "kubeconfig"),
+		// A path the hook MAY write one line to, which this function quotes
+		// in the error it returns. It lives in the temporary directory and
+		// goes away with it, because its content is for the error, not for
+		// the install directory.
+		//
+		// This exists because the alternative does not work. A hook's failure
+		// is recorded in a file the installer names but does not read, so the
+		// installer's own log -- the thing attached to a support case -- says
+		// which phase failed and not why, and answering that costs a round
+		// trip to whoever still has the install directory. Reading the log
+		// automatically is not available either: the Ignition phase's natural
+		// output is a pre-signed URL over the whole bootstrap ignition, so
+		// "quote the hook's last line" would publish a credential for one
+		// phase out of four, under a rule its author cannot see.
+		//
+		// One line the author chose has neither problem, and it is uniform
+		// across phases.
+		"OPENSHIFT_INSTALL_HOOK_FAILURE_FILE="+filepath.Join(objDir, "failure-reason"),
 	)
 
 	// Two variables nothing but Ignition sees. They are set from the
@@ -294,19 +313,48 @@ func Run(ctx context.Context, req Request) error {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
+	// The banners mark, in the installer's own log, the window in which code
+	// the installer did not write and cannot vouch for is running. Everything
+	// between them is the provider's: the installer chose the moment and the
+	// inputs, the provider chose what happens.
+	//
+	// This is not decoration. `platform: external` is a shared-responsibility
+	// contract, and the usual way that goes wrong is a support conversation
+	// about a failure inside a partner's hook that reads, from the log alone,
+	// like a failure in OpenShift. A reader scanning for the cause of a broken
+	// install should be able to see which side of the line they are on without
+	// knowing what a hook is.
+	//
+	// Both banners carry the phase, so two hooks cannot be confused for one,
+	// and the closing one is emitted whether the hook succeeded or failed --
+	// an unterminated window would be read as "the installer never came back",
+	// which is the opposite of what a hook failure means.
+	logrus.Infof("=== STARTING PROVIDER HOOK (%s) ===", req.Kind)
 	runErr := cmd.Run()
+	logrus.Infof("=== FINISHING PROVIDER HOOK (%s) ===", req.Kind)
+
 	if runErr != nil {
-		// The hook's last words are deliberately not interpolated into this
-		// error. They used to be, and for the three original phases it was
+		// The hook's *output* is still deliberately not interpolated into
+		// this error. It used to be, and for the three original phases it was
 		// the right trade: a hook is the only thing that knows why it failed.
 		// Ignition changed the arithmetic -- its natural debug output is
 		// a pre-signed URL over the whole bootstrap ignition -- and a rule
 		// that quoted some phases and not others would be a rule the hook
-		// author cannot see from their side. So the path is given instead,
-		// and it is given in the error rather than only in the log above,
-		// because the error is what a user reads first.
+		// author cannot see from their side.
+		//
+		// What is interpolated is the one line the hook chose to write to
+		// OPENSHIFT_INSTALL_HOOK_FAILURE_FILE, which is not the same thing:
+		// the author decides the content, so the rule is uniform across
+		// phases and visible from the side that has to satisfy it. The log
+		// path is still given either way, because the summary is a pointer to
+		// the cause and not a replacement for it.
+		reason := hookFailureReason(filepath.Join(objDir, "failure-reason"))
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
+			if reason != "" {
+				return fmt.Errorf("the %s hook %s exited %d: %s (its full output is in %s)",
+					req.Kind, req.Program, exitErr.ExitCode(), reason, logPath)
+			}
 			return fmt.Errorf("the %s hook %s exited %d; its output is in %s",
 				req.Kind, req.Program, exitErr.ExitCode(), logPath)
 		}
@@ -315,6 +363,37 @@ func Run(ctx context.Context, req Request) error {
 	}
 	logrus.Infof("The %s hook %s succeeded", req.Kind, req.Program)
 	return nil
+}
+
+// maxHookFailureReason bounds what a hook can put into the installer's error.
+//
+// A limit rather than trust: the file is written by a program the installer
+// did not author, and an error message is read by a person. A hook that
+// redirects its whole stdout here should get its first line quoted and
+// truncated, not turn one error into a page of scrollback.
+const maxHookFailureReason = 300
+
+// hookFailureReason returns the single line a hook chose to explain itself
+// with, or "" if it wrote nothing, could not be read, or had nothing to say.
+//
+// Every failure mode here returns "", and that is deliberate: this is a
+// courtesy on top of an error that already exists and is already correct.
+// Failing to read it must never become a second error competing with the
+// first, which is the one the user actually needs.
+func hookFailureReason(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	line = strings.TrimSpace(line)
+	// Truncated by runes, not bytes, so a multi-byte character cannot be cut
+	// in half and turn the message into mojibake at exactly the moment
+	// somebody is trying to read it.
+	if r := []rune(line); len(r) > maxHookFailureReason {
+		line = string(r[:maxHookFailureReason]) + "..."
+	}
+	return line
 }
 
 // openLog creates this phase's log file, truncating any earlier one.
