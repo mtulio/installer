@@ -131,6 +131,29 @@ type CAPI struct {
 	// +optional
 	ControllerArgs []string `json:"controllerArgs,omitempty"`
 
+	// RequiredEnv names the environment variables the provider's controller
+	// cannot start without.
+	//
+	// The controller inherits the installer's environment already
+	// (pkg/clusterapi/internal/process/process.go:131), and that is the
+	// problem rather than the solution: it works invisibly. A provider that
+	// needs a variable has no way to say so, the installer has no way to
+	// check, and a missing one surfaces as a start-up timeout naming nothing.
+	// Measured on CAPOCI, which reads AUTH_CONFIG_DIR at setup and exits:
+	// "timeout waiting for process controller to start", fifteen minutes in,
+	// with the real message buried in the controller's own output.
+	//
+	// Declaring it moves that to validation, where being wrong is free and
+	// the message names the variable. The cluster creator is told what to set
+	// by the artifact itself rather than by documentation that may be stale.
+	//
+	// NAMES ONLY, NEVER VALUES, and the installer does not read the values
+	// either -- it checks that each name is set and non-empty and says no
+	// more. A value in a payload is a value published to everyone who can
+	// pull the image, and these names are routinely credentials.
+	// +optional
+	RequiredEnv []string `json:"requiredEnv,omitempty"`
+
 	// InfrastructureComponents is the single components bundle -- the
 	// provider's CRDs and webhook configurations. Only those two kinds are
 	// installed: the installer runs the controller as a local process, so any
@@ -470,6 +493,29 @@ func (d *Descriptor) ApplyExecutableModes(root string) error {
 //   - Nothing executable is present that the payload did not declare. This is
 //     what makes "the installer validates structure, not content" a guarantee
 //     rather than a slogan: a payload cannot carry unannounced executables.
+//
+// isEnvName reports whether s is a POSIX environment variable name.
+//
+// Deliberately strict. The point is not portability but refusing to echo
+// anything that is not a name: the one thing a caller must never be able to
+// smuggle through this field is a value.
+func isEnvName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r == '_':
+		case r >= 'A' && r <= 'Z':
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9' && i > 0:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (d *Descriptor) Validate(root string) error {
 	// Containment first. A declared path that escapes the payload root would
 	// have the installer run or read something that did not come out of the
@@ -525,6 +571,40 @@ func (d *Descriptor) Validate(root string) error {
 		if err := mustExist(h.Hook.Program, "spec.openshift.installerHooks."+h.Phase+".program", false); err != nil {
 			return err
 		}
+	}
+
+	// The environment the provider declared it cannot start without.
+	//
+	// Checked here, with the rest of the payload, because here is before the
+	// local control plane starts and before any cloud resource exists -- the
+	// same place a bad payload reference already fails, and the reason that
+	// placement is worth keeping. A missing variable found later is a
+	// start-up timeout that names nothing.
+	//
+	// Every missing name is reported, not just the first: a provider needing
+	// three variables should cost one round trip, not three.
+	//
+	// Only presence and non-emptiness. The installer never reads the value --
+	// these names are routinely credentials, and an installer that read one
+	// could log it.
+	var missing []string
+	for i, name := range d.Spec.CAPI.RequiredEnv {
+		// Shape-checked before it is used, and the error reports the position
+		// rather than the content. An entry like NAME=value would otherwise be
+		// treated as a name, found unset, and echoed back in the message --
+		// publishing the very thing this field exists to keep out of the
+		// payload. Caught by its own test.
+		if !isEnvName(name) {
+			return fmt.Errorf("%s declares an invalid entry at spec.capi.requiredEnv[%d]: it must be a variable NAME, matching [A-Za-z_][A-Za-z0-9_]*, and never NAME=value -- a payload carries names, not values",
+				external.PayloadDescriptorFile, i)
+		}
+		if v, ok := os.LookupEnv(name); !ok || v == "" {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("the provider payload requires these environment variables, which are unset or empty: %s. They are declared in %s under spec.capi.requiredEnv; the provider's controller cannot start without them",
+			strings.Join(missing, ", "), external.PayloadDescriptorFile)
 	}
 
 	executables := d.executables()
